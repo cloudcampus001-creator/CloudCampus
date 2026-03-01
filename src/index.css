@@ -1,0 +1,112 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Futuristic Light Theme - Vibrant, Glass, Clean */
+    --background: 210 40% 96%;
+    --foreground: 222.2 84% 4.9%;
+    
+    /* Glassmorphism Card Base */
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --card-opacity: 0.7;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    --primary: 246 80% 60%; /* Electric Blue/Purple */
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 90%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --muted: 210 40% 90%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 246 80% 60%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 85%;
+    --input: 214.3 31.8% 85%;
+    --ring: 246 80% 60%;
+
+    --radius: 1rem;
+  }
+
+  .dark {
+    /* Futuristic Dark Theme - Deep Space, Neon, Sleek */
+    --background: 224 71% 4%;
+    --foreground: 210 40% 98%;
+
+    --card: 224 71% 6%;
+    --card-foreground: 210 40% 98%;
+    --card-opacity: 0.4;
+
+    --popover: 224 71% 4%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 263 70% 50%; /* Neon Purple */
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 215 27.9% 16.9%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 215 27.9% 16.9%;
+    --muted-foreground: 217.9 10.6% 64.9%;
+
+    --accent: 263 70% 50%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 215 27.9% 16.9%;
+    --input: 215 27.9% 16.9%;
+    --ring: 263 70% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground transition-colors duration-500 selection:bg-primary selection:text-primary-foreground;
+    background-image: 
+      radial-gradient(at 0% 0%, rgba(var(--primary), 0.15) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, rgba(147, 51, 234, 0.15) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(56, 189, 248, 0.15) 0px, transparent 50%),
+      radial-gradient(at 0% 100%, rgba(236, 72, 153, 0.15) 0px, transparent 50%);
+    background-attachment: fixed;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-primary/30 rounded-full hover:bg-primary/50 transition-colors;
+}
+
+/* Glassmorphism Utilities */
+.glass {
+  @apply bg-card/60 backdrop-blur-xl border border-white/10 shadow-xl;
+}
+
+.glass-hover {
+  @apply hover:bg-card/80 hover:border-primary/30 hover:shadow-primary/10 hover:shadow-2xl transition-all duration-300;
+}
+
+/* Neon text effect for headers */
+.text-glow {
+  text-shadow: 0 0 20px rgba(168, 85, 247, 0.5);
+}
