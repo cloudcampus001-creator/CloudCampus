@@ -11,6 +11,10 @@
  *
  * 2. A global activity tracker resets the 5-day inactivity timer on
  *    every click, keypress, or touch.
+ *
+ * ROUTING CHANGE (landing page):
+ *    /               → LandingPage        (new marketing landing page)
+ *    /select-school  → SchoolSelectionPage (school + role picker)
  */
 import React, { useEffect } from 'react';
 import {
@@ -27,6 +31,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { touchActivity, getSession } from '@/lib/sessionPersistence';
 
 // Pages
+import LandingPage              from '@/pages/LandingPage';           // ← NEW
 import SchoolSelectionPage       from '@/pages/SchoolSelectionPage';
 import RoleSelectionPage         from '@/pages/RoleSelectionPage';
 import ParentLoginPage           from '@/pages/ParentLoginPage';
@@ -124,11 +129,12 @@ const AppContent = () => {
   }
 
   const isDashboard = location.pathname.startsWith('/dashboard');
+  const isLanding   = location.pathname === '/';
 
   return (
     <div className="min-h-screen bg-background relative selection:bg-primary/30">
 
-      {!isDashboard && (
+      {!isDashboard && !isLanding && (
         <div className="fixed top-4 right-4 z-[100] flex items-center gap-2 md:gap-3 animate-in fade-in slide-in-from-top-4 duration-700 delay-300">
           <LanguageSwitcher />
           <ThemeToggle />
@@ -136,11 +142,12 @@ const AppContent = () => {
       )}
 
       <Routes>
-        {/* Public */}
-        <Route path="/"         element={<SchoolSelectionPage />} />
-        <Route path="/about"    element={<AboutUsPage />} />
-        <Route path="/contact"  element={<ContactUsPage />} />
-        <Route path="/cloud-ai" element={<CloudAIPage />} />
+        {/* ── Public ──────────────────────────────────────────── */}
+        <Route path="/"              element={<LandingPage />} />          {/* ← landing page */}
+        <Route path="/select-school" element={<SchoolSelectionPage />} />  {/* ← school picker */}
+        <Route path="/about"         element={<AboutUsPage />} />
+        <Route path="/contact"       element={<ContactUsPage />} />
+        <Route path="/cloud-ai"      element={<CloudAIPage />} />
 
         <Route path="/role-selection/:schoolId"       element={<RoleSelectionPage />} />
         <Route path="/login/parent/:schoolId"         element={<ParentLoginPage />} />
@@ -149,7 +156,7 @@ const AppContent = () => {
         <Route path="/login/vice-principal/:schoolId" element={<VicePrincipalLoginPage />} />
         <Route path="/login/administrator/:schoolId"  element={<AdministratorLoginPage />} />
 
-        {/* Protected dashboards */}
+        {/* ── Protected dashboards ────────────────────────────── */}
         <Route path="/dashboard/parent/*"
           element={<ProtectedRoute role="parent"><ParentDashboard /></ProtectedRoute>} />
 
