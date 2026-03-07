@@ -7,12 +7,12 @@ const AdminChatPage = () => {
   const { t } = useLanguage();
   const userId = localStorage.getItem('userId');
   const schoolId = localStorage.getItem('schoolId');
-  
+
   const identityName = "Administrator";
   const role = "administrator";
 
   const relatedContext = {
-     schoolId: schoolId ? parseInt(schoolId) : null,
+    schoolId: schoolId ? parseInt(schoolId) : null,
   };
 
   return (
@@ -20,16 +20,13 @@ const AdminChatPage = () => {
       <Helmet>
         <title>{t('chat')} - {t('role_admin')}</title>
       </Helmet>
-      <div className="p-4 h-full max-w-7xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold tracking-tight">{t('schoolCommunications')}</h1>
-          <p className="text-muted-foreground">{t('schoolCommDesc')}</p>
-        </div>
-        <ChatInterface 
-           currentUserRole={role}
-           currentUserId={userId}
-           currentUserName={identityName}
-           relatedContext={relatedContext}
+      {/* Full height, no padding — chat fills the entire page area */}
+      <div className="h-full w-full overflow-hidden">
+        <ChatInterface
+          currentUserRole={role}
+          currentUserId={userId}
+          currentUserName={identityName}
+          relatedContext={relatedContext}
         />
       </div>
     </>

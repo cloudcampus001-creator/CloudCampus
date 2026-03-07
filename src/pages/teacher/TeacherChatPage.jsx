@@ -9,7 +9,7 @@ const TeacherChatPage = () => {
   const userId = localStorage.getItem('userId');
   const userName = localStorage.getItem('userName');
   const schoolId = localStorage.getItem('schoolId');
-  
+
   const [identityName, setIdentityName] = useState(`${userName} (${t('role_teacher')})`);
   const [classesTeaching, setClassesTeaching] = useState([]);
 
@@ -21,14 +21,14 @@ const TeacherChatPage = () => {
         .select('subjects, classes_teaching')
         .eq('id', userId)
         .single();
-        
+
       if (data) {
         if (data.subjects && data.subjects.length > 0) {
           const subjectsStr = data.subjects.join(' & ');
           setIdentityName(`${subjectsStr} ${t('subjectTeacher')}`);
         }
         if (data.classes_teaching) {
-           setClassesTeaching(data.classes_teaching);
+          setClassesTeaching(data.classes_teaching);
         }
       }
     };
@@ -36,10 +36,10 @@ const TeacherChatPage = () => {
   }, [userId, t]);
 
   const role = 'teacher';
-  
+
   const relatedContext = {
     schoolId: schoolId ? parseInt(schoolId) : null,
-    classesTeaching: classesTeaching
+    classesTeaching: classesTeaching,
   };
 
   return (
@@ -47,16 +47,13 @@ const TeacherChatPage = () => {
       <Helmet>
         <title>{t('chat')} - {t('role_teacher')}</title>
       </Helmet>
-      <div className="p-4 h-full max-w-7xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold tracking-tight">{t('staffClassChat')}</h1>
-          <p className="text-muted-foreground">{t('staffClassDesc')}</p>
-        </div>
-        <ChatInterface 
-           currentUserRole={role}
-           currentUserId={userId}
-           currentUserName={identityName}
-           relatedContext={relatedContext}
+      {/* Full height, no padding — chat fills the entire page area */}
+      <div className="h-full w-full overflow-hidden">
+        <ChatInterface
+          currentUserRole={role}
+          currentUserId={userId}
+          currentUserName={identityName}
+          relatedContext={relatedContext}
         />
       </div>
     </>
