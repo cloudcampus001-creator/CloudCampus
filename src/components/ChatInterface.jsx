@@ -9,7 +9,6 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/components/ui/use-toast';
 import { format } from 'date-fns';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -409,7 +408,7 @@ const ChatInterface = ({ currentUserRole, currentUserId, currentUserName, relate
         </div>
 
         {/* Conversation List */}
-        <ScrollArea className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           <div className="py-1">
             {loading && (
               <div className="flex justify-center items-center py-12">
@@ -473,7 +472,7 @@ const ChatInterface = ({ currentUserRole, currentUserId, currentUserName, relate
                 </div>
               ))}
           </div>
-        </ScrollArea>
+        </div>
       </div>
 
       {/* ================================================================
@@ -537,8 +536,9 @@ const ChatInterface = ({ currentUserRole, currentUserId, currentUserName, relate
               {/* Background overlay */}
               <div className="absolute inset-0 bg-background/95" />
 
-              <ScrollArea className="h-full relative z-10">
-                <div className="px-3 sm:px-4 py-4 space-y-1 pb-2">
+              {/* Messages scroll container — absolute so it fills the relative parent reliably */}
+              <div className="absolute inset-0 overflow-y-auto z-10">
+                <div className="px-3 sm:px-4 py-4 space-y-1 pb-4">
                   {groupMessagesByDate(messages).map((item, i) => {
                     if (item.type === 'date') {
                       return (
@@ -629,7 +629,7 @@ const ChatInterface = ({ currentUserRole, currentUserId, currentUserName, relate
                   })}
                   <div ref={messagesEndRef} />
                 </div>
-              </ScrollArea>
+              </div>
             </div>
 
             {/* ---- INPUT BAR ---- */}
@@ -779,7 +779,7 @@ const ChatInterface = ({ currentUserRole, currentUserId, currentUserName, relate
             </div>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 min-h-0">
+          <div className="flex-1 min-h-0 overflow-y-auto">
             <div className="p-3">
               {contactsLoading ? (
                 <div className="flex justify-center items-center py-12">
@@ -834,7 +834,7 @@ const ChatInterface = ({ currentUserRole, currentUserId, currentUserName, relate
                 </div>
               )}
             </div>
-          </ScrollArea>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
