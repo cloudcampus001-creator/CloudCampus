@@ -1,23 +1,38 @@
 <!doctype html>
 <html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<link rel="icon" type="image/png" href="/logo.png" />
-		<meta name="generator" content="CloudCampus" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>Cloud Campus | The Best School Management System</title>
-		<meta name="description" content="Cloud Campus helps schools, teachers, and parents manage discipline, marks, and activities in one easy platform.
-		CloudCampus is a comprehensive, cloud-based School Management System (SMS) built as a modern React Single-Page Application (SPA). It serves a multi-school environment with five distinct user roles, real-time communication, AI integration, and a mobile-friendly PWA architecture." />
-		<meta name="keywords" content="school management, education software, student tracking, Cloud Campus" />
-		<meta name="robots" content="index, follow" />
-		<meta property="og:title" content="Cloud Campus | School Management" />
-		<meta property="og:description" content="Manage your school easily with our all-in-one platform." />
-		<meta property="og:type" content="website" />
-		<meta property="og:image" content="https://cloudcampus237.com/logo.png" />
-		<meta property="og:url" content="https://cloudcampus237.com" />
-	</head>
-	<body>
-		<div id="root"></div>
-		<script type="module" src="/src/main.jsx"></script>
-	</body>
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <meta name="generator" content="CloudCampus" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cloud Campus</title>
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#6366f1" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Cloud Campus" />
+    <link rel="apple-touch-icon" href="/logo.png" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+
+    <!-- Service Worker Registration -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker
+            .register('/sw.js', { scope: '/' })
+            .then((reg) => {
+              console.log('[App] Service Worker registered, scope:', reg.scope);
+            })
+            .catch((err) => {
+              console.warn('[App] Service Worker registration failed:', err);
+            });
+        });
+      }
+    </script>
+  </body>
 </html>
