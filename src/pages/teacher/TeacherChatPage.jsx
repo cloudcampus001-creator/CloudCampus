@@ -42,14 +42,16 @@ const TeacherChatPage = () => {
     classesTeaching: classesTeaching,
   };
 
+  const chatHeight = 'calc(100vh - 130px)';
+
   return (
     <>
       <Helmet>
         <title>{t('chat')} - {t('role_teacher')}</title>
       </Helmet>
       <div
-        className="-mx-4 -mt-4 -mb-24 md:-mx-8 md:-mt-8 md:-mb-8 overflow-hidden"
-        style={{ height: 'calc(100vh - 65px)' }}
+        className="-mx-4 -mt-4 -mb-24 md:-mx-8 md:-mt-8 md:-mb-8 overflow-hidden md:h-screen"
+        style={{ height: chatHeight }}
       >
         <ChatInterface
           currentUserRole={role}
