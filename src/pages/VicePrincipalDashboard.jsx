@@ -29,15 +29,16 @@ const VicePrincipalDashboard = () => {
   const { t } = useLanguage();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-  // Invisible — requests push permission + signals device on new notifications
   useDeviceNotifications();
   
   const userName = localStorage.getItem('userName') || 'Vice Principal';
   const userId = localStorage.getItem('userId');
 
-  // Class Selection State
   const [managedClasses, setManagedClasses] = useState([]);
   const [selectedClassId, setSelectedClassId] = useState(null);
+
+  // Hide the class-selector context bar on the chat page — it wastes height there
+  const isChatPage = location.pathname.includes('/chat');
 
   const navItems = [
     { icon: Home, label: t('overview'), path: '/dashboard/vice-principal' },
@@ -51,7 +52,6 @@ const VicePrincipalDashboard = () => {
   useEffect(() => {
     const fetchManagedClasses = async () => {
       if (!userId) return;
-      // Fetch classes where vp_id matches
       const { data, error } = await supabase
         .from('classes')
         .select('id, name')
@@ -59,7 +59,6 @@ const VicePrincipalDashboard = () => {
       
       if (data && data.length > 0) {
         setManagedClasses(data);
-        // Retrieve last selected class or default to first
         const storedClass = localStorage.getItem('vpSelectedClass');
         if (storedClass && data.find(c => c.id.toString() === storedClass)) {
           setSelectedClassId(storedClass);
@@ -101,10 +100,7 @@ const VicePrincipalDashboard = () => {
       >
         <div className="p-6 flex items-center justify-between">
           {isSidebarOpen && (
-             <motion.div 
-               initial={{ opacity: 0 }} 
-               animate={{ opacity: 1 }} 
-             >
+             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                <LogoDropdown>
                  <div className="flex items-center gap-2 font-bold text-xl bg-clip-text text-transparent bg-gradient-to-r from-purple-500 to-pink-500">
                    <Cloud className="text-purple-500 h-6 w-6" />
@@ -123,17 +119,14 @@ const VicePrincipalDashboard = () => {
             <nav className="space-y-2">
             {navItems.map((item) => (
                 <Link key={item.path} to={item.path}>
-                <div
-                    className={cn(
+                <div className={cn(
                     "flex items-center p-3 rounded-xl transition-all duration-300 group relative overflow-hidden",
                     isPathActive(item.path) 
                         ? "bg-pink-500 text-white shadow-lg shadow-pink-500/30" 
                         : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
-                    )}
-                >
+                    )}>
                     <item.icon className={cn("h-5 w-5 z-10", isSidebarOpen && "mr-3")} />
                     {isSidebarOpen && <span className="font-medium z-10">{item.label}</span>}
-                    
                     {!isPathActive(item.path) && (
                         <div className="absolute inset-0 bg-gradient-to-r from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                     )}
@@ -160,7 +153,6 @@ const VicePrincipalDashboard = () => {
                  </div>
              )}
           </div>
-          
           <Button 
             variant="destructive" 
             className={cn("w-full justify-start bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20", !isSidebarOpen && "justify-center px-2")}
@@ -191,25 +183,28 @@ const VicePrincipalDashboard = () => {
 
       {/* Main Content */}
       <main className="flex-1 p-4 md:p-8 pb-24 md:pb-8 overflow-y-auto h-[calc(100vh-65px)] md:h-screen scroll-smooth flex flex-col">
-        {/* Top Bar with Class Selector */}
-        <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card/40 p-4 rounded-xl border border-white/5 backdrop-blur-sm">
-          <div>
-             <h2 className="text-lg font-semibold">{t('dashboardContext')}</h2>
-             <p className="text-xs text-muted-foreground">{t('selectClass')}</p>
+        
+        {/* Class Selector — hidden on chat page since it wastes height there */}
+        {!isChatPage && (
+          <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card/40 p-4 rounded-xl border border-white/5 backdrop-blur-sm">
+            <div>
+               <h2 className="text-lg font-semibold">{t('dashboardContext')}</h2>
+               <p className="text-xs text-muted-foreground">{t('selectClass')}</p>
+            </div>
+            <div className="w-full sm:w-[250px]">
+               <Select value={selectedClassId} onValueChange={handleClassChange} disabled={managedClasses.length === 0}>
+                  <SelectTrigger className="bg-background/60 border-pink-500/30 focus:ring-pink-500">
+                     <SelectValue placeholder={managedClasses.length === 0 ? t('noClasses') : t('selectClass')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                     {managedClasses.map((cls) => (
+                        <SelectItem key={cls.id} value={cls.id.toString()}>{cls.name}</SelectItem>
+                     ))}
+                  </SelectContent>
+               </Select>
+            </div>
           </div>
-          <div className="w-full sm:w-[250px]">
-             <Select value={selectedClassId} onValueChange={handleClassChange} disabled={managedClasses.length === 0}>
-                <SelectTrigger className="bg-background/60 border-pink-500/30 focus:ring-pink-500">
-                   <SelectValue placeholder={managedClasses.length === 0 ? t('noClasses') : t('selectClass')} />
-                </SelectTrigger>
-                <SelectContent>
-                   {managedClasses.map((cls) => (
-                      <SelectItem key={cls.id} value={cls.id.toString()}>{cls.name}</SelectItem>
-                   ))}
-                </SelectContent>
-             </Select>
-          </div>
-        </div>
+        )}
 
         <Routes>
           <Route path="/" element={<VPHome selectedClass={selectedClassId} />} />
@@ -226,12 +221,10 @@ const VicePrincipalDashboard = () => {
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card/90 backdrop-blur-xl border-t border-white/10 flex justify-around p-2 z-50 safe-area-pb shadow-[0_-10px_20px_rgba(0,0,0,0.2)]">
         {navItems.map((item) => (
           <Link key={item.path} to={item.path} className="flex-1">
-            <div 
-              className={cn(
+            <div className={cn(
                 "flex flex-col items-center justify-center p-2 rounded-xl transition-all",
                 isPathActive(item.path) ? "text-pink-500 scale-110" : "text-muted-foreground"
-              )}
-            >
+              )}>
               <item.icon className="h-6 w-6 mb-1" />
             </div>
           </Link>
