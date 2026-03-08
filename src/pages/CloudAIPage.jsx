@@ -142,51 +142,125 @@ function CopyButton({ text }) {
   );
 }
 
-// Syntax colouring — lightweight manual approach
+// ── Colour tokens — all inline styles so Tailwind purge never kills them ──────
+const C = {
+  keyword:  'color:#c792ea;font-weight:600',   // purple   — keywords
+  builtin:  'color:#82aaff',                   // blue     — built-ins / types
+  string:   'color:#c3e88d',                   // green    — strings
+  number:   'color:#f78c6c',                   // orange   — numbers
+  comment:  'color:#546e7a;font-style:italic', // grey     — comments
+  tag:      'color:#f07178',                   // red      — HTML tags
+  attr:     'color:#ffcb6b',                   // yellow   — attributes
+  constant: 'color:#ff9cac',                   // pink     — booleans / null
+  func:     'color:#82aaff',                   // blue     — function names
+  classN:   'color:#ffcb6b',                   // yellow   — class names
+  prop:     'color:#89ddff',                   // cyan     — CSS properties
+  hex:      'color:#f78c6c',                   // orange   — hex colours
+  operator: 'color:#89ddff',                   // cyan     — operators
+  sql_kw:   'color:#c792ea;font-weight:600',   // purple   — SQL keywords
+  sql_fn:   'color:#82aaff',                   // blue     — SQL functions
+};
+const s = (style, content) => `<span style="${style}">${content}</span>`;
+
 function highlightCode(code, lang) {
   const esc = code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const l = (lang || '').toLowerCase();
+  const l   = (lang || '').toLowerCase();
 
+  // ── JavaScript / TypeScript / JSX / TSX ─────────────────────────────────
   if (['js','javascript','jsx','ts','typescript','tsx'].includes(l)) {
     return esc
-      .replace(/\/\/.*/g, m => `<span class="text-zinc-500 italic">${m}</span>`)
-      .replace(/(\/\*[\s\S]*?\*\/)/g, m => `<span class="text-zinc-500 italic">${m}</span>`)
-      .replace(/\b(const|let|var|function|return|if|else|for|while|class|import|export|default|from|async|await|new|typeof|instanceof|try|catch|finally|throw|switch|case|break|continue|of|in)\b/g,
-        m => `<span class="text-violet-400 font-medium">${m}</span>`)
-      .replace(/\b(true|false|null|undefined|NaN|Infinity)\b/g,
-        m => `<span class="text-amber-400">${m}</span>`)
-      .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)/g,
-        m => `<span class="text-green-400">${m}</span>`)
-      .replace(/\b(\d+\.?\d*)\b/g, m => `<span class="text-sky-400">${m}</span>`)
-      .replace(/\b([A-Z][a-zA-Z0-9_]*)\b/g, m => `<span class="text-cyan-300">${m}</span>`);
+      // Comments first (protect from further replacement)
+      .replace(/\/\/[^\n]*/g,         m => s(C.comment, m))
+      .replace(/\/\*[\s\S]*?\*\//g,   m => s(C.comment, m))
+      // Strings & template literals
+      .replace(/(`(?:[^`\\]|\\.)*`)/g,                       m => s(C.string, m))
+      .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g,     m => s(C.string, m))
+      // Keywords
+      .replace(/\b(const|let|var|function|return|if|else|for|while|do|class|extends|import|export|default|from|async|await|new|typeof|instanceof|try|catch|finally|throw|switch|case|break|continue|of|in|yield|static|get|set|super|this|delete|void|debugger)\b/g,
+               m => s(C.keyword, m))
+      // Boolean / null / undefined
+      .replace(/\b(true|false|null|undefined|NaN|Infinity)\b/g, m => s(C.constant, m))
+      // Numbers
+      .replace(/\b(\d+\.?\d*(?:e[+-]?\d+)?)\b/g,             m => s(C.number, m))
+      // Class names (CamelCase)
+      .replace(/\b([A-Z][a-zA-Z0-9_]+)\b/g,                  m => s(C.classN, m))
+      // Function calls
+      .replace(/\b([a-z_][a-zA-Z0-9_]*)(?=\s*\()/g,          m => s(C.func, m));
   }
+
+  // ── Python ───────────────────────────────────────────────────────────────
   if (['py','python'].includes(l)) {
     return esc
-      .replace(/#.*/g, m => `<span class="text-zinc-500 italic">${m}</span>`)
-      .replace(/\b(def|class|import|from|return|if|elif|else|for|while|in|not|and|or|is|None|True|False|try|except|finally|with|as|pass|break|continue|lambda|yield|global|nonlocal|del|assert|raise)\b/g,
-        m => `<span class="text-violet-400 font-medium">${m}</span>`)
-      .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|"""[\s\S]*?"""|'''[\s\S]*?''')/g,
-        m => `<span class="text-green-400">${m}</span>`)
-      .replace(/\b(\d+\.?\d*)\b/g, m => `<span class="text-sky-400">${m}</span>`);
+      .replace(/#[^\n]*/g, m => s(C.comment, m))
+      .replace(/("""[\s\S]*?"""|'''[\s\S]*?''')/g,            m => s(C.string, m))
+      .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g,     m => s(C.string, m))
+      .replace(/\b(def|class|import|from|return|if|elif|else|for|while|in|not|and|or|is|None|True|False|try|except|finally|with|as|pass|break|continue|lambda|yield|global|nonlocal|del|assert|raise|async|await)\b/g,
+               m => s(C.keyword, m))
+      .replace(/\b(print|len|range|int|str|float|list|dict|set|tuple|bool|type|input|open|enumerate|zip|map|filter|sorted|reversed|sum|min|max|abs|round)\b/g,
+               m => s(C.builtin, m))
+      .replace(/\b(\d+\.?\d*)\b/g, m => s(C.number, m))
+      .replace(/\b([A-Z][a-zA-Z0-9_]+)\b/g, m => s(C.classN, m))
+      .replace(/\b([a-z_][a-zA-Z0-9_]*)(?=\s*\()/g, m => s(C.func, m));
   }
-  if (['html','xml'].includes(l)) {
+
+  // ── HTML / XML ───────────────────────────────────────────────────────────
+  if (['html','xml','jsx-html'].includes(l)) {
     return esc
-      .replace(/(&lt;\/?[a-zA-Z][^&]*?&gt;)/g, m => `<span class="text-blue-400">${m}</span>`)
-      .replace(/("(?:[^"\\]|\\.)*")/g, m => `<span class="text-green-400">${m}</span>`);
+      .replace(/(&lt;!--[\s\S]*?--&gt;)/g,  m => s(C.comment, m))
+      .replace(/(&lt;\/?)([\w:-]+)/g,
+        (_, bracket, tag) => s(C.operator, bracket) + s(C.tag, tag))
+      .replace(/([\w:-]+)(=)/g,
+        (_, attr, eq) => s(C.attr, attr) + s(C.operator, eq))
+      .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, m => s(C.string, m))
+      .replace(/(&gt;)/g, m => s(C.operator, m));
   }
+
+  // ── CSS / SCSS ───────────────────────────────────────────────────────────
+  if (['css','scss','less'].includes(l)) {
+    return esc
+      .replace(/(\/\*[\s\S]*?\*\/)/g,      m => s(C.comment, m))
+      .replace(/(#[0-9a-fA-F]{3,8})\b/g,   m => s(C.hex, m))
+      .replace(/(-?[\d.]+(?:px|em|rem|vh|vw|%|s|ms|deg|fr)?)\b/g, m => s(C.number, m))
+      .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, m => s(C.string, m))
+      .replace(/([a-zA-Z-]+)(\s*:)/g,
+        (_, prop, colon) => s(C.prop, prop) + s(C.operator, colon))
+      .replace(/([@&.#:[\]])([a-zA-Z0-9_-]*)/g,
+        (_, sym, name) => s(C.keyword, sym) + s(C.classN, name));
+  }
+
+  // ── SQL ──────────────────────────────────────────────────────────────────
   if (['sql'].includes(l)) {
     return esc
-      .replace(/\b(SELECT|FROM|WHERE|JOIN|ON|INSERT|UPDATE|DELETE|CREATE|TABLE|INDEX|DROP|ALTER|ADD|SET|VALUES|INTO|ORDER|BY|GROUP|HAVING|LIMIT|OFFSET|AS|INNER|LEFT|RIGHT|OUTER|FULL|CROSS|UNION|ALL|DISTINCT|AND|OR|NOT|NULL|IS|IN|LIKE|BETWEEN|EXISTS|COUNT|SUM|AVG|MAX|MIN)\b/gi,
-        m => `<span class="text-violet-400 font-medium">${m.toUpperCase()}</span>`)
-      .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, m => `<span class="text-green-400">${m}</span>`)
-      .replace(/\b(\d+)\b/g, m => `<span class="text-sky-400">${m}</span>`);
+      .replace(/--[^\n]*/g, m => s(C.comment, m))
+      .replace(/\b(SELECT|FROM|WHERE|JOIN|LEFT|RIGHT|INNER|OUTER|FULL|CROSS|ON|INSERT|INTO|UPDATE|DELETE|CREATE|TABLE|INDEX|DROP|ALTER|ADD|SET|VALUES|ORDER|BY|GROUP|HAVING|LIMIT|OFFSET|AS|UNION|ALL|DISTINCT|AND|OR|NOT|NULL|IS|IN|LIKE|BETWEEN|EXISTS|CASE|WHEN|THEN|END|WITH|RETURNING)\b/gi,
+               m => s(C.sql_kw, m.toUpperCase()))
+      .replace(/\b(COUNT|SUM|AVG|MAX|MIN|COALESCE|NULLIF|CAST|NOW|DATE|LOWER|UPPER|LENGTH|TRIM|CONCAT|ROUND|FLOOR|CEIL)\b/gi,
+               m => s(C.sql_fn, m.toUpperCase()))
+      .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, m => s(C.string, m))
+      .replace(/\b(\d+)\b/g, m => s(C.number, m));
   }
-  if (['css','scss'].includes(l)) {
+
+  // ── Bash / Shell ─────────────────────────────────────────────────────────
+  if (['bash','sh','shell','zsh'].includes(l)) {
     return esc
-      .replace(/([a-zA-Z-]+)\s*:/g, m => `<span class="text-sky-400">${m}</span>`)
-      .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, m => `<span class="text-green-400">${m}</span>`)
-      .replace(/(#[0-9a-fA-F]{3,8})\b/g, m => `<span class="text-amber-400">${m}</span>`);
+      .replace(/#[^\n]*/g, m => s(C.comment, m))
+      .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, m => s(C.string, m))
+      .replace(/\b(if|then|else|elif|fi|for|while|do|done|case|esac|function|return|exit|in|echo|export|source|cd|ls|mkdir|rm|cp|mv|grep|sed|awk|chmod|sudo|apt|npm|pip|git)\b/g,
+               m => s(C.keyword, m))
+      .replace(/\$[\w{][^}\s]*/g, m => s(C.builtin, m))
+      .replace(/\b(\d+)\b/g, m => s(C.number, m));
   }
+
+  // ── JSON ─────────────────────────────────────────────────────────────────
+  if (['json'].includes(l)) {
+    return esc
+      .replace(/("(?:[^"\\]|\\.)*")(\s*:)/g,
+        (_, key, colon) => s(C.prop, key) + s(C.operator, colon))
+      .replace(/("(?:[^"\\]|\\.)*")/g, m => s(C.string, m))
+      .replace(/\b(true|false|null)\b/g, m => s(C.constant, m))
+      .replace(/\b(\d+\.?\d*)\b/g, m => s(C.number, m));
+  }
+
   return esc;
 }
 
@@ -194,14 +268,23 @@ function highlightCode(code, lang) {
 function MathBlock({ content, inline }) {
   if (inline) {
     return (
-      <span className="inline-flex items-center mx-1 px-2 py-0.5 bg-violet-500/10 border border-violet-500/20 rounded text-violet-300 font-mono text-sm">
+      <span
+        style={{ background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', color: '#fbbf24', fontFamily: 'monospace' }}
+        className="inline-flex items-center mx-1 px-2 py-0.5 rounded text-sm font-semibold"
+      >
         {content}
       </span>
     );
   }
   return (
-    <div className="my-3 p-4 bg-violet-500/8 border border-violet-500/20 rounded-xl overflow-x-auto">
-      <div className="text-violet-200 font-mono text-sm text-center leading-relaxed whitespace-pre">
+    <div
+      style={{ background: 'rgba(15,12,41,0.7)', border: '1px solid rgba(251,191,36,0.3)', borderLeft: '3px solid #f59e0b' }}
+      className="my-3 p-4 rounded-xl overflow-x-auto shadow-lg"
+    >
+      <div
+        style={{ color: '#fde68a', fontFamily: 'monospace', fontSize: '0.9rem', lineHeight: '1.8', letterSpacing: '0.02em' }}
+        className="text-center whitespace-pre"
+      >
         {content}
       </div>
     </div>
@@ -339,17 +422,49 @@ function TextSegments({ text }) {
 
 function CodeBlock({ lang, code }) {
   const highlighted = highlightCode(code, lang);
+
+  // Lang → display label + accent color
+  const langMeta = {
+    js: { label: 'JavaScript', color: '#f7df1e' },
+    javascript: { label: 'JavaScript', color: '#f7df1e' },
+    jsx: { label: 'JSX', color: '#61dafb' },
+    ts: { label: 'TypeScript', color: '#3178c6' },
+    typescript: { label: 'TypeScript', color: '#3178c6' },
+    tsx: { label: 'TSX', color: '#61dafb' },
+    py: { label: 'Python', color: '#3572A5' },
+    python: { label: 'Python', color: '#3572A5' },
+    html: { label: 'HTML', color: '#e34c26' },
+    xml: { label: 'XML', color: '#e34c26' },
+    css: { label: 'CSS', color: '#563d7c' },
+    scss: { label: 'SCSS', color: '#c6538c' },
+    sql: { label: 'SQL', color: '#e38c00' },
+    json: { label: 'JSON', color: '#cbcb41' },
+    bash: { label: 'Bash', color: '#89e051' },
+    sh: { label: 'Shell', color: '#89e051' },
+    shell: { label: 'Shell', color: '#89e051' },
+  };
+  const meta = langMeta[(lang||'').toLowerCase()] || { label: lang || 'Code', color: '#abb2bf' };
+
   return (
-    <div className="my-3 rounded-xl overflow-hidden border border-white/8 bg-zinc-950 shadow-lg">
-      <div className="flex items-center justify-between px-4 py-2 bg-zinc-900/80 border-b border-white/5">
-        <div className="flex items-center gap-2">
-          <Code2 className="w-3.5 h-3.5 text-zinc-400" />
-          <span className="text-[11px] text-zinc-400 font-mono uppercase tracking-wider">{lang || 'code'}</span>
+    <div style={{ background: '#0d1117', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', overflow: 'hidden', margin: '12px 0', boxShadow: '0 4px 24px rgba(0,0,0,0.4)' }}>
+      {/* Header bar */}
+      <div style={{ background: '#161b22', borderBottom: '1px solid rgba(255,255,255,0.06)', padding: '8px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* Traffic light dots */}
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#ff5f57', display: 'inline-block' }} />
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#febc2e', display: 'inline-block' }} />
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#28c840', display: 'inline-block' }} />
+          </div>
+          <span style={{ color: meta.color, fontFamily: 'monospace', fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            {meta.label}
+          </span>
         </div>
         <CopyButton text={code} />
       </div>
-      <div className="overflow-x-auto">
-        <pre className="p-4 text-xs font-mono leading-relaxed text-zinc-300 min-w-0">
+      {/* Code */}
+      <div style={{ overflowX: 'auto' }}>
+        <pre style={{ padding: '16px', margin: 0, fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace", fontSize: '12.5px', lineHeight: '1.7', color: '#abb2bf', tabSize: 2, minWidth: 0 }}>
           <code dangerouslySetInnerHTML={{ __html: highlighted }} />
         </pre>
       </div>
