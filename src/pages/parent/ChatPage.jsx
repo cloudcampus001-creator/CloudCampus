@@ -23,8 +23,10 @@ const ChatPage = () => {
       <Helmet>
         <title>{t('chat')} - {t('role_parent')}</title>
       </Helmet>
-      {/* Full height, no padding — chat fills the entire page area */}
-      <div className="h-full w-full overflow-hidden">
+      <div
+        className="-mx-4 -mt-4 -mb-24 md:-mx-8 md:-mt-8 md:-mb-8 overflow-hidden"
+        style={{ height: 'calc(100vh - 65px)' }}
+      >
         <ChatInterface
           currentUserRole={role}
           currentUserId={userId}

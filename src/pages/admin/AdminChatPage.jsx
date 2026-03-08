@@ -20,8 +20,17 @@ const AdminChatPage = () => {
       <Helmet>
         <title>{t('chat')} - {t('role_admin')}</title>
       </Helmet>
-      {/* Full height, no padding — chat fills the entire page area */}
-      <div className="h-full w-full overflow-hidden">
+      {/*
+        Escape the dashboard <main>'s padding (p-4 md:p-8) and mobile bottom
+        nav offset (pb-24) using negative margins, then claim the exact
+        remaining viewport height so ChatInterface fills it completely.
+        Desktop: sidebar beside main, no top header → h-screen
+        Mobile: top header = 65px → h-[calc(100vh-65px)]
+      */}
+      <div
+        className="-mx-4 -mt-4 -mb-24 md:-mx-8 md:-mt-8 md:-mb-8 overflow-hidden"
+        style={{ height: 'calc(100vh - 65px)' }}
+      >
         <ChatInterface
           currentUserRole={role}
           currentUserId={userId}
