@@ -514,16 +514,11 @@ function loadKaTeX() {
       const style = document.createElement('style');
       style.id = 'katex-color-fix';
       style.textContent = `
-        .cloudai-math-block,
-        .cloudai-math-inline { color: #93c5fd; }
+        /* ── Block math: dark navy card ── */
         .cloudai-math-block .katex,
         .cloudai-math-block .katex *,
         .cloudai-math-block .katex-html,
-        .cloudai-math-block .katex-html *,
-        .cloudai-math-inline .katex,
-        .cloudai-math-inline .katex *,
-        .cloudai-math-inline .katex-html,
-        .cloudai-math-inline .katex-html * {
+        .cloudai-math-block .katex-html * {
           color: #93c5fd !important;
           border-color: #3b82f6 !important;
         }
@@ -535,12 +530,22 @@ function loadKaTeX() {
           background: #3b82f6 !important;
           border-color: #3b82f6 !important;
         }
-        .cloudai-math-block .sqrt-line {
-          border-color: #60a5fa !important;
-        }
         .cloudai-math-block .mopen,
         .cloudai-math-block .mclose {
           color: #7dd3fc !important;
+        }
+
+        /* ── Inline math: bold navy text only, no box ── */
+        .cloudai-math-inline .katex,
+        .cloudai-math-inline .katex *,
+        .cloudai-math-inline .katex-html,
+        .cloudai-math-inline .katex-html * {
+          color: #1e40af !important;
+          font-weight: 700 !important;
+          border-color: transparent !important;
+        }
+        .cloudai-math-inline .frac-line {
+          background: #1e40af !important;
         }
       `;
       document.head.appendChild(style);
@@ -587,7 +592,7 @@ function MathBlock({ content, inline }) {
   if (!html) {
     if (inline) {
       return (
-        <span style={{ display:'inline', background:'rgba(30,58,138,0.3)', border:'1px solid rgba(96,165,250,0.4)', color:'#93c5fd', fontFamily:'monospace', padding:'1px 6px', borderRadius:4, fontSize:'0.85em' }}>
+        <span style={{ display:'inline', color:'#1e40af', fontWeight:700, fontFamily:'monospace', fontSize:'0.9em' }}>
           {content}
         </span>
       );
@@ -603,7 +608,7 @@ function MathBlock({ content, inline }) {
     return (
       <span
         className="cloudai-math-inline"
-        style={{ display:'inline', verticalAlign:'middle', background:'rgba(30,58,138,0.25)', border:'1px solid rgba(96,165,250,0.3)', borderRadius:5, padding:'1px 5px', margin:'0 2px' }}
+        style={{ display:'inline', verticalAlign:'middle', fontWeight:700 }}
         dangerouslySetInnerHTML={{ __html: html }}
       />
     );
