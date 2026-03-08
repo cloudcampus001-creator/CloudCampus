@@ -501,7 +501,7 @@ let katexReady = null; // singleton promise
 function loadKaTeX() {
   if (katexReady) return katexReady;
   katexReady = new Promise((resolve) => {
-    // CSS
+    // KaTeX CSS
     if (!document.getElementById('katex-css')) {
       const link = document.createElement('link');
       link.id   = 'katex-css';
@@ -509,13 +509,48 @@ function loadKaTeX() {
       link.href = `https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/katex.min.css`;
       document.head.appendChild(link);
     }
-    // JS — only if not already there
+    // Inject color override BEFORE the script loads so it's ready immediately
+    if (!document.getElementById('katex-color-fix')) {
+      const style = document.createElement('style');
+      style.id = 'katex-color-fix';
+      style.textContent = `
+        .cloudai-math-block,
+        .cloudai-math-inline { color: #93c5fd; }
+        .cloudai-math-block .katex,
+        .cloudai-math-block .katex *,
+        .cloudai-math-block .katex-html,
+        .cloudai-math-block .katex-html *,
+        .cloudai-math-inline .katex,
+        .cloudai-math-inline .katex *,
+        .cloudai-math-inline .katex-html,
+        .cloudai-math-inline .katex-html * {
+          color: #93c5fd !important;
+          border-color: #3b82f6 !important;
+        }
+        .cloudai-math-block .katex-display,
+        .cloudai-math-block .katex-display * {
+          color: #bfdbfe !important;
+        }
+        .cloudai-math-block .frac-line {
+          background: #3b82f6 !important;
+          border-color: #3b82f6 !important;
+        }
+        .cloudai-math-block .sqrt-line {
+          border-color: #60a5fa !important;
+        }
+        .cloudai-math-block .mopen,
+        .cloudai-math-block .mclose {
+          color: #7dd3fc !important;
+        }
+      `;
+      document.head.appendChild(style);
+    }
     if (window.katex) { resolve(window.katex); return; }
     const script  = document.createElement('script');
     script.src    = `https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/katex.min.js`;
     script.async  = true;
     script.onload = () => resolve(window.katex);
-    script.onerror = () => resolve(null); // fail silently
+    script.onerror = () => resolve(null);
     document.head.appendChild(script);
   });
   return katexReady;
@@ -539,29 +574,36 @@ function MathBlock({ content, inline }) {
         displayMode: !inline,
         throwOnError: false,
         strict: false,
-        trust: false,
         output: 'html',
-        macros: { '\\R': '\\mathbb{R}', '\\N': '\\mathbb{N}', '\\Z': '\\mathbb{Z}' },
+        macros: { '\\R': '\\mathbb{R}', '\\N': '\\mathbb{N}', '\\Z': '\\mathbb{Z}', '\\C': '\\mathbb{C}' },
       });
       setHtml(rendered);
     } catch (e) {
-      setHtml(`<span style="color:#fbbf24;font-family:monospace">${content}</span>`);
+      setHtml(`<span style="font-family:monospace">${content}</span>`);
     }
   }, [content, inline, ready]);
 
-  // Fallback while KaTeX loads
+  // Fallback while KaTeX loads — show raw LaTeX styled nicely
   if (!html) {
-    const fallbackStyle = inline
-      ? { background:'rgba(30,58,138,0.25)', border:'1px solid rgba(96,165,250,0.4)', color:'#93c5fd', fontFamily:'monospace', padding:'1px 8px', borderRadius:4, fontSize:'0.85rem', display:'inline' }
-      : { background:'#0f172a', border:'1px solid rgba(96,165,250,0.3)', borderLeft:'3px solid #3b82f6', padding:'12px 16px', borderRadius:8, color:'#93c5fd', fontFamily:'monospace', textAlign:'center', overflowX:'auto', margin:'10px 0' };
-    return <span style={fallbackStyle}>{content}</span>;
+    if (inline) {
+      return (
+        <span style={{ display:'inline', background:'rgba(30,58,138,0.3)', border:'1px solid rgba(96,165,250,0.4)', color:'#93c5fd', fontFamily:'monospace', padding:'1px 6px', borderRadius:4, fontSize:'0.85em' }}>
+          {content}
+        </span>
+      );
+    }
+    return (
+      <div style={{ background:'#0a1628', border:'1px solid rgba(59,130,246,0.3)', borderLeft:'3px solid #3b82f6', borderRadius:10, padding:'16px 20px', margin:'10px 0', color:'#93c5fd', fontFamily:'monospace', textAlign:'center', overflowX:'auto' }}>
+        {content}
+      </div>
+    );
   }
 
   if (inline) {
     return (
       <span
-        className="katex-inline mx-0.5"
-        style={{ display:'inline', verticalAlign:'middle', background:'rgba(30,58,138,0.2)', border:'1px solid rgba(96,165,250,0.25)', borderRadius:4, padding:'0 4px' }}
+        className="cloudai-math-inline"
+        style={{ display:'inline', verticalAlign:'middle', background:'rgba(30,58,138,0.25)', border:'1px solid rgba(96,165,250,0.3)', borderRadius:5, padding:'1px 5px', margin:'0 2px' }}
         dangerouslySetInnerHTML={{ __html: html }}
       />
     );
@@ -569,7 +611,8 @@ function MathBlock({ content, inline }) {
 
   return (
     <div
-      style={{ background:'#0c1628', border:'1px solid rgba(59,130,246,0.25)', borderLeft:'3px solid #3b82f6', borderRadius:12, padding:'20px 24px', margin:'12px 0', overflowX:'auto', boxShadow:'0 4px 24px rgba(0,0,30,0.5)' }}
+      className="cloudai-math-block"
+      style={{ background:'#071120', border:'1px solid rgba(59,130,246,0.3)', borderLeft:'4px solid #3b82f6', borderRadius:12, padding:'20px 24px', margin:'12px 0', overflowX:'auto', boxShadow:'0 4px 24px rgba(0,0,40,0.6)', textAlign:'center' }}
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );
@@ -1004,17 +1047,7 @@ const CloudAIPage = () => {
     <>
       <Helmet>
         <title>Cloud AI — Axion Enterprise</title>
-        {/* KaTeX dark-navy theme */}
-        <style>{`
-          .katex { color: #bfdbfe !important; }
-          .katex-display { color: #bfdbfe !important; }
-          .katex-display > .katex { color: #bfdbfe !important; }
-          .katex .mord, .katex .mbin, .katex .mrel, .katex .mop,
-          .katex .mopen, .katex .mclose, .katex .mpunct { color: #bfdbfe !important; }
-          .katex .mfrac .frac-line { border-color: #60a5fa !important; }
-          .katex .sqrt > .sqrt-sign { color: #60a5fa !important; }
-          .katex .accent > .accent-body { color: #60a5fa !important; }
-        `}</style>
+      </Helmet>
       </Helmet>
 
       <div className="min-h-screen bg-background flex flex-col relative overflow-hidden">
