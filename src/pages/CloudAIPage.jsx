@@ -142,327 +142,356 @@ function CopyButton({ text }) {
   );
 }
 
-// ── Colour tokens — all inline styles so Tailwind purge never kills them ──────
-const C = {
-  keyword:  'color:#c792ea;font-weight:600',   // purple   — keywords
-  builtin:  'color:#82aaff',                   // blue     — built-ins / types
-  string:   'color:#c3e88d',                   // green    — strings
-  number:   'color:#f78c6c',                   // orange   — numbers
-  comment:  'color:#546e7a;font-style:italic', // grey     — comments
-  tag:      'color:#f07178',                   // red      — HTML tags
-  attr:     'color:#ffcb6b',                   // yellow   — attributes
-  constant: 'color:#ff9cac',                   // pink     — booleans / null
-  func:     'color:#82aaff',                   // blue     — function names
-  classN:   'color:#ffcb6b',                   // yellow   — class names
-  prop:     'color:#89ddff',                   // cyan     — CSS properties
-  hex:      'color:#f78c6c',                   // orange   — hex colours
-  operator: 'color:#89ddff',                   // cyan     — operators
-  sql_kw:   'color:#c792ea;font-weight:600',   // purple   — SQL keywords
-  sql_fn:   'color:#82aaff',                   // blue     — SQL functions
+// ── Single-pass syntax highlighter ──────────────────────────────────────────
+// Tokenizer: collects ALL matches first, sorts by position, builds output ONCE.
+// Chained .replace() causes span tags to be re-processed — this never does that.
+
+const PALETTE = {
+  keyword:  'color:#c792ea;font-weight:600',
+  builtin:  'color:#82aaff',
+  string:   'color:#c3e88d',
+  number:   'color:#f78c6c',
+  comment:  'color:#546e7a;font-style:italic',
+  tag:      'color:#f07178',
+  attr:     'color:#ffcb6b',
+  constant: 'color:#ff9cac',
+  func:     'color:#82aaff',
+  classname:'color:#ffcb6b',
+  prop:     'color:#89ddff',
+  operator: 'color:#89ddff',
+  preproc:  'color:#c3a6ff',
+  lifetime: 'color:#ff9e64',
 };
-const s = (style, content) => `<span style="${style}">${content}</span>`;
+
+function _escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Walk source with ordered [regex, colorKey] rules.
+// Find all non-overlapping matches (leftmost wins), return sorted token list.
+function _tokenize(source, rules) {
+  const raw = [];
+  for (const [rx, colorKey] of rules) {
+    const flags = rx.flags.includes('g') ? rx.flags : rx.flags + 'g';
+    const re = new RegExp(rx.source, flags);
+    let m;
+    while ((m = re.exec(source)) !== null) {
+      raw.push({ start: m.index, end: m.index + m[0].length, style: PALETTE[colorKey], raw: m[0] });
+    }
+  }
+  raw.sort((a, b) => a.start !== b.start ? a.start - b.start : b.end - a.end);
+  const clean = [];
+  let cursor = 0;
+  for (const tok of raw) {
+    if (tok.start >= cursor) { clean.push(tok); cursor = tok.end; }
+  }
+  return clean;
+}
+
+function _buildHtml(source, tokens) {
+  let out = '', cursor = 0;
+  for (const tok of tokens) {
+    if (tok.start > cursor) out += _escHtml(source.slice(cursor, tok.start));
+    out += '<span style="' + tok.style + '">' + _escHtml(tok.raw) + '</span>';
+    cursor = tok.end;
+  }
+  if (cursor < source.length) out += _escHtml(source.slice(cursor));
+  return out;
+}
+
+// ── Shared primitives ────────────────────────────────────────────────────────
+const _CMTLINE = /\/\/[^\n]*/;
+const _CMTBLK  = /\/\*[\s\S]*?\*\//;
+const _CMTHASH = /#[^\n]*/;
+const _STRDQ   = /"(?:[^"\\]|\\.)*"/;
+const _STRSQ   = /'(?:[^'\\]|\\.)*'/;
+const _STRBT   = /`(?:[^`\\]|\\.)*`/;
+const _STRTRDQ = /"""[\s\S]*?"""/;
+const _STRTRSQ = /'''[\s\S]*?'''/;
+const _NUM     = /\b\d+\.?\d*(?:[eE][+-]?\d+)?\b/;
+const _PREPROC = /^[ \t]*#\s*(?:include|define|ifdef|ifndef|endif|pragma|undef|if|else|elif|error)[^\n]*/m;
+
+const _LANG_RULES = {};
+
+// JavaScript / TypeScript / JSX / TSX
+const _JS_RULES = [
+  [_CMTBLK,  'comment'],
+  [_CMTLINE, 'comment'],
+  [_STRBT,   'string'],
+  [_STRDQ,   'string'],
+  [_STRSQ,   'string'],
+  [/\b(const|let|var|function|return|if|else|for|while|do|class|extends|import|export|default|from|async|await|new|typeof|instanceof|try|catch|finally|throw|switch|case|break|continue|of|in|yield|static|get|set|super|this|delete|void|debugger|type|interface|enum|declare|abstract|override|readonly|namespace|as|satisfies|keyof|infer|never|unknown)\b/, 'keyword'],
+  [/\b(true|false|null|undefined|NaN|Infinity)\b/, 'constant'],
+  [/\b([A-Z][a-zA-Z0-9_]*)(?=\s*[<({])/, 'classname'],
+  [/\b([a-z_$][a-zA-Z0-9_$]*)(?=\s*\()/, 'func'],
+  [_NUM, 'number'],
+];
+_LANG_RULES.js = _LANG_RULES.javascript = _LANG_RULES.ts = _LANG_RULES.typescript =
+_LANG_RULES.jsx = _LANG_RULES.tsx = _JS_RULES;
+
+// Python
+_LANG_RULES.py = _LANG_RULES.python = [
+  [_CMTHASH,  'comment'],
+  [_STRTRDQ,  'string'],
+  [_STRTRSQ,  'string'],
+  [_STRDQ,    'string'],
+  [_STRSQ,    'string'],
+  [/\b(def|class|import|from|return|if|elif|else|for|while|in|not|and|or|is|try|except|finally|with|as|pass|break|continue|lambda|yield|global|nonlocal|del|assert|raise|async|await)\b/, 'keyword'],
+  [/\b(None|True|False)\b/, 'constant'],
+  [/\b(print|len|range|int|str|float|list|dict|set|tuple|bool|type|input|open|enumerate|zip|map|filter|sorted|reversed|sum|min|max|abs|round|repr|isinstance|issubclass|hasattr|getattr|setattr|delattr|vars|dir|id|hash|iter|next|super|property|classmethod|staticmethod|Exception|ValueError|TypeError|KeyError|IndexError|AttributeError|RuntimeError|StopIteration|NotImplementedError|OSError)\b/, 'builtin'],
+  [/\b([A-Z][a-zA-Z0-9_]+)\b/, 'classname'],
+  [/\b([a-z_][a-zA-Z0-9_]*)(?=\s*\()/, 'func'],
+  [_NUM, 'number'],
+];
+
+// C
+_LANG_RULES.c = [
+  [_CMTBLK,  'comment'],
+  [_CMTLINE, 'comment'],
+  [_PREPROC, 'preproc'],
+  [_STRDQ,   'string'],
+  [_STRSQ,   'string'],
+  [/\b(auto|break|case|char|const|continue|default|do|double|else|enum|extern|float|for|goto|if|inline|int|long|register|restrict|return|short|signed|sizeof|static|struct|switch|typedef|union|unsigned|void|volatile|while|NULL|nullptr)\b/, 'keyword'],
+  [/\b([A-Z_][A-Z0-9_]{2,})\b/, 'constant'],
+  [/\b([a-z_][a-zA-Z0-9_]*)(?=\s*\()/, 'func'],
+  [/\b\d+\.?\d*(?:[uUlLfF]+)?\b/, 'number'],
+];
+
+// C++
+const _CPP_RULES = [
+  [_CMTBLK,  'comment'],
+  [_CMTLINE, 'comment'],
+  [_PREPROC, 'preproc'],
+  [_STRDQ,   'string'],
+  [_STRSQ,   'string'],
+  [/\b(alignas|alignof|and|asm|auto|bitand|bitor|bool|break|case|catch|char|char8_t|char16_t|char32_t|class|compl|concept|const|consteval|constexpr|constinit|const_cast|continue|co_await|co_return|co_yield|decltype|default|delete|do|double|dynamic_cast|else|enum|explicit|export|extern|false|float|for|friend|goto|if|inline|int|long|mutable|namespace|new|noexcept|not|not_eq|nullptr|operator|or|or_eq|private|protected|public|register|reinterpret_cast|requires|return|short|signed|sizeof|static|static_assert|static_cast|struct|switch|template|this|thread_local|throw|true|try|typedef|typeid|typename|union|unsigned|using|virtual|void|volatile|wchar_t|while|override|final)\b/, 'keyword'],
+  [/\b(std|string|vector|map|set|unordered_map|unordered_set|pair|array|deque|list|queue|stack|optional|variant|tuple|unique_ptr|shared_ptr|weak_ptr|cout|cin|cerr|endl|size_t|ptrdiff_t)\b/, 'builtin'],
+  [/\b([A-Z][a-zA-Z0-9_]+)\b/, 'classname'],
+  [/\b([a-z_][a-zA-Z0-9_]*)(?=\s*[<(])/, 'func'],
+  [/\b\d+\.?\d*(?:[uUlLfF]+)?\b/, 'number'],
+];
+_LANG_RULES.cpp = _LANG_RULES['c++'] = _LANG_RULES.cxx = _LANG_RULES.cc = _LANG_RULES.hpp = _CPP_RULES;
+
+// Java
+_LANG_RULES.java = [
+  [_CMTBLK,  'comment'],
+  [_CMTLINE, 'comment'],
+  [_STRDQ,   'string'],
+  [_STRSQ,   'string'],
+  [/@\w+/,   'attr'],
+  [/\b(abstract|assert|boolean|break|byte|case|catch|char|class|const|continue|default|do|double|else|enum|extends|final|finally|float|for|goto|if|implements|import|instanceof|int|interface|long|native|new|package|private|protected|public|return|short|static|strictfp|super|switch|synchronized|this|throw|throws|transient|try|var|void|volatile|while|record|sealed|permits|yield)\b/, 'keyword'],
+  [/\b(true|false|null)\b/, 'constant'],
+  [/\b(String|Integer|Long|Double|Float|Boolean|Object|Number|Math|System|Arrays|Collections|List|ArrayList|Map|HashMap|Set|HashSet|Optional|Stream|Exception|RuntimeException|Override|Deprecated|SuppressWarnings)\b/, 'builtin'],
+  [/\b([A-Z][a-zA-Z0-9_]+)\b/, 'classname'],
+  [/\b([a-z_][a-zA-Z0-9_]*)(?=\s*\()/, 'func'],
+  [/\b\d+\.?\d*[lLfFdD]?\b/, 'number'],
+];
+
+// Rust
+_LANG_RULES.rust = _LANG_RULES.rs = [
+  [_CMTBLK,  'comment'],
+  [_CMTLINE, 'comment'],
+  [/r#?"(?:[^"\\]|\\.)*"#?/, 'string'],
+  [_STRDQ,   'string'],
+  [/'[a-z_][a-zA-Z0-9_]*(?!\w)/, 'lifetime'],
+  [_STRSQ,   'string'],
+  [/\b(as|async|await|break|const|continue|crate|dyn|else|enum|extern|fn|for|if|impl|in|let|loop|match|mod|move|mut|pub|ref|return|self|Self|static|struct|super|trait|type|unsafe|use|where|while)\b/, 'keyword'],
+  [/\b(true|false|None|Some|Ok|Err)\b/, 'constant'],
+  [/\b(i8|i16|i32|i64|i128|isize|u8|u16|u32|u64|u128|usize|f32|f64|bool|char|str|String|Vec|Option|Result|Box|Rc|Arc|HashMap|HashSet|println|print|format|panic|assert|assert_eq|todo|unimplemented|dbg)\b/, 'builtin'],
+  [/\b([A-Z][a-zA-Z0-9_]+)\b/, 'classname'],
+  [/\b([a-z_][a-zA-Z0-9_]*)(?=\s*[!(])/, 'func'],
+  [/\b\d+\.?\d*(?:_?[iu]\d+|_?f\d+)?\b/, 'number'],
+];
+
+// Go
+_LANG_RULES.go = _LANG_RULES.golang = [
+  [_CMTBLK,  'comment'],
+  [_CMTLINE, 'comment'],
+  [/`[\s\S]*?`/, 'string'],
+  [_STRDQ,   'string'],
+  [_STRSQ,   'string'],
+  [/\b(break|case|chan|const|continue|default|defer|else|fallthrough|for|func|go|goto|if|import|interface|map|package|range|return|select|struct|switch|type|var)\b/, 'keyword'],
+  [/\b(nil|true|false|iota)\b/, 'constant'],
+  [/\b(bool|byte|complex64|complex128|error|float32|float64|int|int8|int16|int32|int64|rune|string|uint|uint8|uint16|uint32|uint64|uintptr|any|make|new|len|cap|append|copy|delete|close|panic|recover|print|println)\b/, 'builtin'],
+  [/\b([A-Z][a-zA-Z0-9_]+)\b/, 'classname'],
+  [/\b([a-z_][a-zA-Z0-9_]*)(?=\s*\()/, 'func'],
+  [_NUM, 'number'],
+];
+
+// PHP
+_LANG_RULES.php = [
+  [_CMTBLK,  'comment'],
+  [_CMTLINE, 'comment'],
+  [_CMTHASH, 'comment'],
+  [_STRDQ,   'string'],
+  [_STRSQ,   'string'],
+  [/\$[a-zA-Z_][a-zA-Z0-9_]*/, 'builtin'],
+  [/\b(abstract|and|array|as|break|callable|case|catch|class|clone|const|continue|declare|default|do|echo|else|elseif|empty|extends|final|finally|fn|for|foreach|function|global|if|implements|include|include_once|instanceof|interface|isset|list|match|namespace|new|or|print|private|protected|public|require|require_once|return|static|switch|throw|trait|try|unset|use|var|while|yield)\b/i, 'keyword'],
+  [/\b(true|false|null|TRUE|FALSE|NULL)\b/, 'constant'],
+  [/\b([A-Z][a-zA-Z0-9_]+)\b/, 'classname'],
+  [/\b([a-z_][a-zA-Z0-9_]*)(?=\s*\()/, 'func'],
+  [_NUM, 'number'],
+];
+
+// Ruby
+_LANG_RULES.ruby = _LANG_RULES.rb = [
+  [_CMTHASH, 'comment'],
+  [_STRDQ,   'string'],
+  [_STRSQ,   'string'],
+  [/\b(BEGIN|END|alias|and|begin|break|case|class|def|do|else|elsif|end|ensure|for|if|in|module|next|not|or|redo|rescue|retry|return|self|super|then|undef|unless|until|when|while|yield|require|include|extend|puts|print|raise|p)\b/, 'keyword'],
+  [/\b(true|false|nil)\b/, 'constant'],
+  [/:[a-zA-Z_][a-zA-Z0-9_]*/, 'constant'],
+  [/@{1,2}[a-zA-Z_][a-zA-Z0-9_]*/, 'attr'],
+  [/\b([A-Z][a-zA-Z0-9_]+)\b/, 'classname'],
+  [/\b([a-z_][a-zA-Z0-9_?!]*)(?=\s*[({])/, 'func'],
+  [_NUM, 'number'],
+];
+
+// Kotlin
+_LANG_RULES.kotlin = _LANG_RULES.kt = _LANG_RULES.kts = [
+  [_CMTBLK,  'comment'],
+  [_CMTLINE, 'comment'],
+  [/"""[\s\S]*?"""/, 'string'],
+  [_STRDQ,   'string'],
+  [/\b(abstract|actual|as|break|by|catch|class|companion|const|constructor|continue|crossinline|data|do|else|enum|expect|external|final|finally|for|fun|get|if|import|in|infix|init|inline|inner|interface|internal|is|it|lateinit|noinline|object|open|operator|out|override|package|private|protected|public|reified|return|sealed|set|super|suspend|tailrec|this|throw|try|typealias|val|var|vararg|when|where|while)\b/, 'keyword'],
+  [/\b(true|false|null)\b/, 'constant'],
+  [/\b(Int|Long|Short|Byte|Double|Float|Boolean|Char|String|Any|Unit|Nothing|List|MutableList|Map|MutableMap|Set|MutableSet|Array|Pair|Triple|println|print|TODO|also|apply|let|run|with|listOf|mapOf|setOf|arrayOf)\b/, 'builtin'],
+  [/@\w+/, 'attr'],
+  [/\b([A-Z][a-zA-Z0-9_]+)\b/, 'classname'],
+  [/\b([a-z_][a-zA-Z0-9_]*)(?=\s*\()/, 'func'],
+  [/\b\d+\.?\d*[LlFf]?\b/, 'number'],
+];
+
+// Swift
+_LANG_RULES.swift = [
+  [_CMTBLK,  'comment'],
+  [_CMTLINE, 'comment'],
+  [_STRDQ,   'string'],
+  [/@\w+/,   'attr'],
+  [/\b(as|associatedtype|break|case|catch|class|continue|default|defer|deinit|do|else|enum|extension|fallthrough|fileprivate|final|for|func|get|guard|if|import|in|init|inout|internal|is|lazy|let|mutating|nil|nonmutating|open|operator|optional|override|postfix|prefix|private|protocol|public|repeat|required|rethrows|return|self|Self|set|some|static|struct|subscript|super|switch|throw|throws|try|typealias|unowned|var|weak|where|while|async|await|actor)\b/, 'keyword'],
+  [/\b(true|false|nil)\b/, 'constant'],
+  [/\b(Int|Int8|Int16|Int32|Int64|UInt|Float|Double|Bool|String|Character|Array|Dictionary|Set|Optional|Void|Any|AnyObject|print|fatalError|precondition|assert)\b/, 'builtin'],
+  [/\b([A-Z][a-zA-Z0-9_]+)\b/, 'classname'],
+  [/\b([a-z_][a-zA-Z0-9_]*)(?=\s*\()/, 'func'],
+  [_NUM, 'number'],
+];
+
+// HTML / XML
+_LANG_RULES.html = _LANG_RULES.xml = [
+  [/<!--[\s\S]*?-->/, 'comment'],
+  [/<\/?[a-zA-Z][a-zA-Z0-9:-]*/, 'tag'],
+  [/[a-zA-Z-]+=/, 'attr'],
+  [_STRDQ, 'string'],
+  [_STRSQ, 'string'],
+];
+
+// CSS / SCSS / Less
+const _CSS_RULES = [
+  [_CMTBLK, 'comment'],
+  [/#[0-9a-fA-F]{3,8}\b/, 'number'],
+  [_STRDQ, 'string'],
+  [_STRSQ, 'string'],
+  [/-?[\d.]+(?:px|em|rem|vh|vw|vmin|vmax|%|s|ms|deg|rad|fr|ch|ex|cm|mm|in|pt|pc)\b/, 'number'],
+  [/[@&][a-zA-Z_-][a-zA-Z0-9_-]*/, 'keyword'],
+  [/\.[a-zA-Z_-][a-zA-Z0-9_-]*/, 'classname'],
+  [/#[a-zA-Z_-][a-zA-Z0-9_-]*/, 'attr'],
+  [/([a-zA-Z-]+)(?=\s*:)/, 'prop'],
+  [/\b\d+\.?\d*\b/, 'number'],
+];
+_LANG_RULES.css = _LANG_RULES.scss = _LANG_RULES.less = _CSS_RULES;
+
+// SQL
+_LANG_RULES.sql = [
+  [/--[^\n]*/, 'comment'],
+  [_CMTBLK,   'comment'],
+  [_STRDQ,    'string'],
+  [_STRSQ,    'string'],
+  [/\b(SELECT|FROM|WHERE|JOIN|LEFT|RIGHT|INNER|OUTER|FULL|CROSS|ON|INSERT|INTO|UPDATE|SET|DELETE|CREATE|TABLE|VIEW|INDEX|DROP|ALTER|ADD|COLUMN|PRIMARY|KEY|FOREIGN|REFERENCES|UNIQUE|NOT|NULL|DEFAULT|ORDER|BY|GROUP|HAVING|LIMIT|OFFSET|AS|UNION|ALL|DISTINCT|AND|OR|IS|IN|LIKE|ILIKE|BETWEEN|EXISTS|CASE|WHEN|THEN|ELSE|END|WITH|RETURNING|BEGIN|COMMIT|ROLLBACK|TRANSACTION)\b/i, 'keyword'],
+  [/\b(COUNT|SUM|AVG|MAX|MIN|COALESCE|NULLIF|CAST|NOW|DATE|LOWER|UPPER|LENGTH|TRIM|CONCAT|REPLACE|SUBSTRING|ROUND|FLOOR|CEIL|ABS|RAND|UUID|ROW_NUMBER|RANK|DENSE_RANK|LAG|LEAD|OVER|PARTITION)\b/i, 'builtin'],
+  [/\b\d+\.?\d*\b/, 'number'],
+];
+
+// JSON
+_LANG_RULES.json = [
+  [/"(?:[^"\\]|\\.)*"(?=\s*:)/, 'prop'],
+  [_STRDQ, 'string'],
+  [/\b(true|false|null)\b/, 'constant'],
+  [/\b\d+\.?\d*(?:[eE][+-]?\d+)?\b/, 'number'],
+];
+
+// Bash / Shell
+const _BASH_RULES = [
+  [_CMTHASH, 'comment'],
+  [_STRDQ,   'string'],
+  [_STRSQ,   'string'],
+  [/\$\{?[\w#@*!?$-]+\}?/, 'builtin'],
+  [/\b(if|then|else|elif|fi|for|while|until|do|done|case|esac|function|return|exit|in|select)\b/, 'keyword'],
+  [/\b(echo|printf|read|cd|ls|pwd|mkdir|rm|cp|mv|cat|grep|sed|awk|find|sort|uniq|curl|wget|chmod|sudo|npm|pip|git|docker|make|export|source|alias)\b/, 'builtin'],
+  [/\b\d+\b/, 'number'],
+];
+_LANG_RULES.bash = _LANG_RULES.sh = _LANG_RULES.shell = _LANG_RULES.zsh = _BASH_RULES;
+
+// YAML
+_LANG_RULES.yaml = _LANG_RULES.yml = [
+  [_CMTHASH, 'comment'],
+  [/^---/m,  'keyword'],
+  [_STRDQ,   'string'],
+  [_STRSQ,   'string'],
+  [/^[ \t]*[a-zA-Z_-][a-zA-Z0-9_-]*(?=\s*:)/m, 'prop'],
+  [/\b(true|false|null|yes|no|on|off)\b/i, 'constant'],
+  [/\b\d+\.?\d*\b/, 'number'],
+];
+
+// Markdown
+_LANG_RULES.md = _LANG_RULES.markdown = [
+  [/^#{1,6}\s.*/m, 'classname'],
+  [/\*\*[\s\S]*?\*\*/, 'attr'],
+  [/`[^`]+`/, 'string'],
+  [/\[[\s\S]*?\]\([\s\S]*?\)/, 'builtin'],
+  [/^>\s.*/m, 'comment'],
+];
+
+// Dockerfile
+_LANG_RULES.dockerfile = _LANG_RULES.docker = [
+  [_CMTHASH, 'comment'],
+  [/^(FROM|RUN|CMD|LABEL|EXPOSE|ENV|ADD|COPY|ENTRYPOINT|VOLUME|USER|WORKDIR|ARG|ONBUILD|STOPSIGNAL|HEALTHCHECK|SHELL)\b/m, 'keyword'],
+  [_STRDQ,   'string'],
+  [_STRSQ,   'string'],
+  [/\$\{?[\w]+\}?/, 'builtin'],
+];
+
+// R
+_LANG_RULES.r = [
+  [_CMTHASH, 'comment'],
+  [_STRDQ,   'string'],
+  [_STRSQ,   'string'],
+  [/\b(if|else|for|while|repeat|break|next|return|function|in)\b/, 'keyword'],
+  [/\b(TRUE|FALSE|NULL|NA|Inf|NaN|T|F)\b/, 'constant'],
+  [/\b(c|list|data\.frame|matrix|print|cat|paste|paste0|length|sum|mean|sd|min|max|seq|rep|apply|lapply|sapply|ggplot|filter|select|mutate|group_by|summarise|arrange)\b/, 'builtin'],
+  [/\b([a-zA-Z.][a-zA-Z0-9._]*)(?=\s*\()/, 'func'],
+  [/\b\d+\.?\d*(?:[eE][+-]?\d+)?L?\b/, 'number'],
+];
+
+// MATLAB
+_LANG_RULES.matlab = _LANG_RULES.m = [
+  [/%[^\n]*/, 'comment'],
+  [_STRSQ,   'string'],
+  [_STRDQ,   'string'],
+  [/\b(break|case|catch|continue|do|else|elseif|end|for|function|global|if|otherwise|parfor|persistent|return|switch|try|while|classdef)\b/, 'keyword'],
+  [/\b(true|false)\b/, 'constant'],
+  [/\b(zeros|ones|eye|rand|randn|linspace|size|length|numel|sum|prod|min|max|mean|std|sort|find|plot|figure|xlabel|ylabel|title|disp|sprintf|fprintf)\b/, 'builtin'],
+  [/\b([a-zA-Z_][a-zA-Z0-9_]*)(?=\s*\()/, 'func'],
+  [/\b\d+\.?\d*(?:[eE][+-]?\d+)?[ij]?\b/, 'number'],
+];
 
 function highlightCode(code, lang) {
-  const esc = code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const l   = (lang || '').toLowerCase();
-
-  // ── JavaScript / TypeScript / JSX / TSX ─────────────────────────────────
-  if (['js','javascript','jsx','ts','typescript','tsx'].includes(l)) {
-    return esc
-      // Comments first (protect from further replacement)
-      .replace(/\/\/[^\n]*/g,         m => s(C.comment, m))
-      .replace(/\/\*[\s\S]*?\*\//g,   m => s(C.comment, m))
-      // Strings & template literals
-      .replace(/(`(?:[^`\\]|\\.)*`)/g,                       m => s(C.string, m))
-      .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g,     m => s(C.string, m))
-      // Keywords
-      .replace(/\b(const|let|var|function|return|if|else|for|while|do|class|extends|import|export|default|from|async|await|new|typeof|instanceof|try|catch|finally|throw|switch|case|break|continue|of|in|yield|static|get|set|super|this|delete|void|debugger)\b/g,
-               m => s(C.keyword, m))
-      // Boolean / null / undefined
-      .replace(/\b(true|false|null|undefined|NaN|Infinity)\b/g, m => s(C.constant, m))
-      // Numbers
-      .replace(/\b(\d+\.?\d*(?:e[+-]?\d+)?)\b/g,             m => s(C.number, m))
-      // Class names (CamelCase)
-      .replace(/\b([A-Z][a-zA-Z0-9_]+)\b/g,                  m => s(C.classN, m))
-      // Function calls
-      .replace(/\b([a-z_][a-zA-Z0-9_]*)(?=\s*\()/g,          m => s(C.func, m));
-  }
-
-  // ── Python ───────────────────────────────────────────────────────────────
-  if (['py','python'].includes(l)) {
-    return esc
-      .replace(/#[^\n]*/g, m => s(C.comment, m))
-      .replace(/("""[\s\S]*?"""|'''[\s\S]*?''')/g,            m => s(C.string, m))
-      .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g,     m => s(C.string, m))
-      .replace(/\b(def|class|import|from|return|if|elif|else|for|while|in|not|and|or|is|None|True|False|try|except|finally|with|as|pass|break|continue|lambda|yield|global|nonlocal|del|assert|raise|async|await)\b/g,
-               m => s(C.keyword, m))
-      .replace(/\b(print|len|range|int|str|float|list|dict|set|tuple|bool|type|input|open|enumerate|zip|map|filter|sorted|reversed|sum|min|max|abs|round)\b/g,
-               m => s(C.builtin, m))
-      .replace(/\b(\d+\.?\d*)\b/g, m => s(C.number, m))
-      .replace(/\b([A-Z][a-zA-Z0-9_]+)\b/g, m => s(C.classN, m))
-      .replace(/\b([a-z_][a-zA-Z0-9_]*)(?=\s*\()/g, m => s(C.func, m));
-  }
-
-  // ── HTML / XML ───────────────────────────────────────────────────────────
-  if (['html','xml','jsx-html'].includes(l)) {
-    return esc
-      .replace(/(&lt;!--[\s\S]*?--&gt;)/g,  m => s(C.comment, m))
-      .replace(/(&lt;\/?)([\w:-]+)/g,
-        (_, bracket, tag) => s(C.operator, bracket) + s(C.tag, tag))
-      .replace(/([\w:-]+)(=)/g,
-        (_, attr, eq) => s(C.attr, attr) + s(C.operator, eq))
-      .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, m => s(C.string, m))
-      .replace(/(&gt;)/g, m => s(C.operator, m));
-  }
-
-  // ── CSS / SCSS ───────────────────────────────────────────────────────────
-  if (['css','scss','less'].includes(l)) {
-    return esc
-      .replace(/(\/\*[\s\S]*?\*\/)/g,      m => s(C.comment, m))
-      .replace(/(#[0-9a-fA-F]{3,8})\b/g,   m => s(C.hex, m))
-      .replace(/(-?[\d.]+(?:px|em|rem|vh|vw|%|s|ms|deg|fr)?)\b/g, m => s(C.number, m))
-      .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, m => s(C.string, m))
-      .replace(/([a-zA-Z-]+)(\s*:)/g,
-        (_, prop, colon) => s(C.prop, prop) + s(C.operator, colon))
-      .replace(/([@&.#:[\]])([a-zA-Z0-9_-]*)/g,
-        (_, sym, name) => s(C.keyword, sym) + s(C.classN, name));
-  }
-
-  // ── SQL ──────────────────────────────────────────────────────────────────
-  if (['sql'].includes(l)) {
-    return esc
-      .replace(/--[^\n]*/g, m => s(C.comment, m))
-      .replace(/\b(SELECT|FROM|WHERE|JOIN|LEFT|RIGHT|INNER|OUTER|FULL|CROSS|ON|INSERT|INTO|UPDATE|DELETE|CREATE|TABLE|INDEX|DROP|ALTER|ADD|SET|VALUES|ORDER|BY|GROUP|HAVING|LIMIT|OFFSET|AS|UNION|ALL|DISTINCT|AND|OR|NOT|NULL|IS|IN|LIKE|BETWEEN|EXISTS|CASE|WHEN|THEN|END|WITH|RETURNING)\b/gi,
-               m => s(C.sql_kw, m.toUpperCase()))
-      .replace(/\b(COUNT|SUM|AVG|MAX|MIN|COALESCE|NULLIF|CAST|NOW|DATE|LOWER|UPPER|LENGTH|TRIM|CONCAT|ROUND|FLOOR|CEIL)\b/gi,
-               m => s(C.sql_fn, m.toUpperCase()))
-      .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, m => s(C.string, m))
-      .replace(/\b(\d+)\b/g, m => s(C.number, m));
-  }
-
-  // ── Bash / Shell ─────────────────────────────────────────────────────────
-  if (['bash','sh','shell','zsh'].includes(l)) {
-    return esc
-      .replace(/#[^\n]*/g, m => s(C.comment, m))
-      .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, m => s(C.string, m))
-      .replace(/\b(if|then|else|elif|fi|for|while|do|done|case|esac|function|return|exit|in|echo|export|source|cd|ls|mkdir|rm|cp|mv|grep|sed|awk|chmod|sudo|apt|npm|pip|git)\b/g,
-               m => s(C.keyword, m))
-      .replace(/\$[\w{][^}\s]*/g, m => s(C.builtin, m))
-      .replace(/\b(\d+)\b/g, m => s(C.number, m));
-  }
-
-  // ── JSON ─────────────────────────────────────────────────────────────────
-  if (['json'].includes(l)) {
-    return esc
-      .replace(/("(?:[^"\\]|\\.)*")(\s*:)/g,
-        (_, key, colon) => s(C.prop, key) + s(C.operator, colon))
-      .replace(/("(?:[^"\\]|\\.)*")/g, m => s(C.string, m))
-      .replace(/\b(true|false|null)\b/g, m => s(C.constant, m))
-      .replace(/\b(\d+\.?\d*)\b/g, m => s(C.number, m));
-  }
-
-  // ── C ────────────────────────────────────────────────────────────────────
-  if (['c'].includes(l)) {
-    return esc
-      .replace(/\/\/[^\n]*/g, m => s(C.comment, m))
-      .replace(/\/\*[\s\S]*?\*\//g, m => s(C.comment, m))
-      .replace(/(#\s*(?:include|define|ifdef|ifndef|endif|pragma|undef|if|else|elif)[^\n]*)/g, m => s(C.attr, m))
-      .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, m => s(C.string, m))
-      .replace(/\b(int|char|float|double|long|short|unsigned|signed|void|struct|union|enum|typedef|const|static|extern|register|volatile|auto|sizeof|return|if|else|for|while|do|switch|case|break|continue|default|goto|NULL)\b/g, m => s(C.keyword, m))
-      .replace(/\b([A-Z_][A-Z0-9_]{2,})\b/g, m => s(C.constant, m))
-      .replace(/\b(\d+\.?\d*(?:[uUlLfF])*)\b/g, m => s(C.number, m))
-      .replace(/\b([a-z_][a-zA-Z0-9_]*)(?=\s*\()/g, m => s(C.func, m));
-  }
-
-  // ── C++ ──────────────────────────────────────────────────────────────────
-  if (['cpp','c++','cxx','cc','hpp'].includes(l)) {
-    return esc
-      .replace(/\/\/[^\n]*/g, m => s(C.comment, m))
-      .replace(/\/\*[\s\S]*?\*\//g, m => s(C.comment, m))
-      .replace(/(#\s*(?:include|define|ifdef|ifndef|endif|pragma|undef|if|else|elif)[^\n]*)/g, m => s(C.attr, m))
-      .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, m => s(C.string, m))
-      .replace(/\b(int|char|float|double|long|short|unsigned|signed|void|bool|auto|struct|class|union|enum|typedef|const|static|extern|volatile|inline|virtual|override|final|explicit|constexpr|noexcept|nullptr|template|typename|namespace|using|public|private|protected|new|delete|this|return|if|else|for|while|do|switch|case|break|continue|default|try|catch|throw|true|false|sizeof|decltype|static_cast|dynamic_cast|reinterpret_cast|const_cast)\b/g,
-               m => s(C.keyword, m))
-      .replace(/\b(std|cout|cin|endl|string|vector|map|set|pair|array|queue|stack|iostream|fstream|sstream)\b/g, m => s(C.builtin, m))
-      .replace(/\b([A-Z][a-zA-Z0-9_]+)\b/g, m => s(C.classN, m))
-      .replace(/\b(\d+\.?\d*(?:[uUlLfF])*)\b/g, m => s(C.number, m))
-      .replace(/\b([a-z_][a-zA-Z0-9_]*)(?=\s*\()/g, m => s(C.func, m));
-  }
-
-  // ── Java ─────────────────────────────────────────────────────────────────
-  if (['java'].includes(l)) {
-    return esc
-      .replace(/\/\/[^\n]*/g, m => s(C.comment, m))
-      .replace(/\/\*[\s\S]*?\*\//g, m => s(C.comment, m))
-      .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, m => s(C.string, m))
-      .replace(/\b(abstract|assert|boolean|break|byte|case|catch|char|class|const|continue|default|do|double|else|enum|extends|final|finally|float|for|goto|if|implements|import|instanceof|int|interface|long|native|new|package|private|protected|public|return|short|static|strictfp|super|switch|synchronized|this|throw|throws|transient|try|void|volatile|while|true|false|null|var|record|sealed|permits|yield)\b/g,
-               m => s(C.keyword, m))
-      .replace(/\b(System|String|Integer|Double|Boolean|List|ArrayList|Map|HashMap|Set|HashSet|Object|Math|Arrays|Collections|Optional|Stream|IOException|Exception|RuntimeException|Override|Deprecated|SuppressWarnings)\b/g,
-               m => s(C.builtin, m))
-      .replace(/\b([A-Z][a-zA-Z0-9_]+)\b/g, m => s(C.classN, m))
-      .replace(/@\w+/g, m => s(C.attr, m))
-      .replace(/\b(\d+\.?\d*[lLfFdD]?)\b/g, m => s(C.number, m))
-      .replace(/\b([a-z_][a-zA-Z0-9_]*)(?=\s*\()/g, m => s(C.func, m));
-  }
-
-  // ── Rust ─────────────────────────────────────────────────────────────────
-  if (['rust','rs'].includes(l)) {
-    return esc
-      .replace(/\/\/[^\n]*/g, m => s(C.comment, m))
-      .replace(/\/\*[\s\S]*?\*\//g, m => s(C.comment, m))
-      .replace(/("(?:[^"\\]|\\.)*"|r#?"(?:[^"\\]|\\.)*"#?)/g, m => s(C.string, m))
-      .replace(/\b(as|async|await|break|const|continue|crate|dyn|else|enum|extern|false|fn|for|if|impl|in|let|loop|match|mod|move|mut|pub|ref|return|self|Self|static|struct|super|trait|true|type|unsafe|use|where|while|abstract|become|box|do|final|macro|override|priv|try|typeof|unsized|virtual|yield)\b/g,
-               m => s(C.keyword, m))
-      .replace(/\b(i8|i16|i32|i64|i128|isize|u8|u16|u32|u64|u128|usize|f32|f64|bool|char|str|String|Vec|Option|Result|Some|None|Ok|Err|Box|Rc|Arc|HashMap|HashSet|BTreeMap|BTreeSet|println|print|eprintln|format|panic|assert|todo|unimplemented)\b/g,
-               m => s(C.builtin, m))
-      .replace(/\b([A-Z][a-zA-Z0-9_]+)\b/g, m => s(C.classN, m))
-      .replace(/'[a-z_][a-zA-Z0-9_]*/g, m => s(C.attr, m))  // lifetimes
-      .replace(/\b(\d+\.?\d*(?:_?[iu]\d+|_?f\d+)?)\b/g, m => s(C.number, m))
-      .replace(/\b([a-z_][a-zA-Z0-9_]*)(?=\s*[!?(])/g, m => s(C.func, m));
-  }
-
-  // ── Go ───────────────────────────────────────────────────────────────────
-  if (['go','golang'].includes(l)) {
-    return esc
-      .replace(/\/\/[^\n]*/g, m => s(C.comment, m))
-      .replace(/\/\*[\s\S]*?\*\//g, m => s(C.comment, m))
-      .replace(/("(?:[^"\\]|\\.)*"|`[\s\S]*?`)/g, m => s(C.string, m))
-      .replace(/\b(break|case|chan|const|continue|default|defer|else|fallthrough|for|func|go|goto|if|import|interface|map|package|range|return|select|struct|switch|type|var|nil|true|false|iota)\b/g,
-               m => s(C.keyword, m))
-      .replace(/\b(int|int8|int16|int32|int64|uint|uint8|uint16|uint32|uint64|uintptr|float32|float64|complex64|complex128|byte|rune|string|bool|error|any|make|new|len|cap|append|copy|delete|close|panic|recover|print|println|fmt|os|io|net|http|json|sync|time|math|sort|strings|strconv|errors|context)\b/g,
-               m => s(C.builtin, m))
-      .replace(/\b([A-Z][a-zA-Z0-9_]+)\b/g, m => s(C.classN, m))
-      .replace(/\b(\d+\.?\d*)\b/g, m => s(C.number, m))
-      .replace(/\b([a-z_][a-zA-Z0-9_]*)(?=\s*\()/g, m => s(C.func, m));
-  }
-
-  // ── PHP ──────────────────────────────────────────────────────────────────
-  if (['php'].includes(l)) {
-    return esc
-      .replace(/\/\/[^\n]*/g, m => s(C.comment, m))
-      .replace(/#[^\n]*/g, m => s(C.comment, m))
-      .replace(/\/\*[\s\S]*?\*\//g, m => s(C.comment, m))
-      .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, m => s(C.string, m))
-      .replace(/\b(abstract|and|array|as|break|callable|case|catch|class|clone|const|continue|declare|default|die|do|echo|else|elseif|empty|enddeclare|endfor|endforeach|endif|endswitch|endwhile|eval|exit|extends|final|finally|fn|for|foreach|function|global|goto|if|implements|include|include_once|instanceof|insteadof|interface|isset|list|match|namespace|new|or|print|private|protected|public|require|require_once|return|static|switch|throw|trait|try|unset|use|var|while|yield|true|false|null)\b/gi,
-               m => s(C.keyword, m))
-      .replace(/\$[a-zA-Z_][a-zA-Z0-9_]*/g, m => s(C.builtin, m))
-      .replace(/\b([A-Z][a-zA-Z0-9_]+)\b/g, m => s(C.classN, m))
-      .replace(/\b(\d+\.?\d*)\b/g, m => s(C.number, m))
-      .replace(/\b([a-z_][a-zA-Z0-9_]*)(?=\s*\()/g, m => s(C.func, m));
-  }
-
-  // ── Ruby ─────────────────────────────────────────────────────────────────
-  if (['ruby','rb'].includes(l)) {
-    return esc
-      .replace(/#[^\n]*/g, m => s(C.comment, m))
-      .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, m => s(C.string, m))
-      .replace(/\b(BEGIN|END|alias|and|begin|break|case|class|def|defined\?|do|else|elsif|end|ensure|false|for|if|in|module|next|nil|not|or|redo|rescue|retry|return|self|super|then|true|undef|unless|until|when|while|yield|require|require_relative|include|extend|attr_accessor|attr_reader|attr_writer|puts|print|raise|p)\b/g,
-               m => s(C.keyword, m))
-      .replace(/:[a-zA-Z_][a-zA-Z0-9_]*/g, m => s(C.constant, m))  // symbols
-      .replace(/\b([A-Z][a-zA-Z0-9_]+)\b/g, m => s(C.classN, m))
-      .replace(/@{1,2}[a-zA-Z_][a-zA-Z0-9_]*/g, m => s(C.attr, m)) // instance/class vars
-      .replace(/\b(\d+\.?\d*)\b/g, m => s(C.number, m))
-      .replace(/\b([a-z_][a-zA-Z0-9_?!]*)(?=\s*[({])/g, m => s(C.func, m));
-  }
-
-  // ── Kotlin ───────────────────────────────────────────────────────────────
-  if (['kotlin','kt','kts'].includes(l)) {
-    return esc
-      .replace(/\/\/[^\n]*/g, m => s(C.comment, m))
-      .replace(/\/\*[\s\S]*?\*\//g, m => s(C.comment, m))
-      .replace(/("(?:[^"\\]|\\.)*"|"""[\s\S]*?""")/g, m => s(C.string, m))
-      .replace(/\b(abstract|actual|annotation|as|break|by|catch|class|companion|const|constructor|continue|crossinline|data|do|dynamic|else|enum|expect|external|false|final|finally|for|fun|get|if|import|in|infix|init|inline|inner|interface|internal|is|it|lateinit|noinline|null|object|open|operator|out|override|package|private|protected|public|reified|return|sealed|set|super|suspend|tailrec|this|throw|true|try|typealias|typeof|val|var|vararg|when|where|while)\b/g,
-               m => s(C.keyword, m))
-      .replace(/\b(Int|Long|Short|Byte|Double|Float|Boolean|Char|String|Any|Unit|Nothing|List|MutableList|Map|MutableMap|Set|MutableSet|Array|Pair|Triple|println|print|TODO|also|apply|let|run|with|takeIf|takeUnless|forEach|map|filter|reduce|fold)\b/g,
-               m => s(C.builtin, m))
-      .replace(/\b([A-Z][a-zA-Z0-9_]+)\b/g, m => s(C.classN, m))
-      .replace(/@\w+/g, m => s(C.attr, m))
-      .replace(/\b(\d+\.?\d*[LlFf]?)\b/g, m => s(C.number, m))
-      .replace(/\b([a-z_][a-zA-Z0-9_]*)(?=\s*\()/g, m => s(C.func, m));
-  }
-
-  // ── Swift ────────────────────────────────────────────────────────────────
-  if (['swift'].includes(l)) {
-    return esc
-      .replace(/\/\/[^\n]*/g, m => s(C.comment, m))
-      .replace(/\/\*[\s\S]*?\*\//g, m => s(C.comment, m))
-      .replace(/("(?:[^"\\]|\\.)*")/g, m => s(C.string, m))
-      .replace(/\b(as|associatedtype|break|case|catch|class|continue|default|defer|deinit|do|else|enum|extension|fallthrough|false|fileprivate|final|for|func|get|guard|if|import|in|init|inout|internal|is|lazy|let|mutating|nil|nonmutating|open|operator|optional|override|postfix|precedencegroup|prefix|private|protocol|public|repeat|required|rethrows|return|self|Self|set|some|static|struct|subscript|super|switch|throw|throws|true|try|typealias|unowned|var|weak|where|while|async|await|actor|nonisolated|isolated|convenience|dynamic|indirect|willSet|didSet)\b/g,
-               m => s(C.keyword, m))
-      .replace(/\b(Int|Int8|Int16|Int32|Int64|UInt|UInt8|UInt16|UInt32|UInt64|Float|Double|Bool|String|Character|Array|Dictionary|Set|Optional|Void|Never|Any|AnyObject|print|fatalError|precondition|assert|debugPrint|dump|type|Mirror|Codable|Equatable|Hashable|Comparable|Identifiable|ObservableObject|Published|State|Binding|View|Text|Image|Button|VStack|HStack|ZStack)\b/g,
-               m => s(C.builtin, m))
-      .replace(/\b([A-Z][a-zA-Z0-9_]+)\b/g, m => s(C.classN, m))
-      .replace(/@\w+/g, m => s(C.attr, m))
-      .replace(/\b(\d+\.?\d*)\b/g, m => s(C.number, m))
-      .replace(/\b([a-z_][a-zA-Z0-9_]*)(?=\s*\()/g, m => s(C.func, m));
-  }
-
-  // ── YAML ─────────────────────────────────────────────────────────────────
-  if (['yaml','yml'].includes(l)) {
-    return esc
-      .replace(/#[^\n]*/g, m => s(C.comment, m))
-      .replace(/^(\s*)([\w-]+)(\s*:)/gm,
-        (_, indent, key, colon) => indent + s(C.prop, key) + s(C.operator, colon))
-      .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, m => s(C.string, m))
-      .replace(/\b(true|false|null|yes|no|on|off)\b/gi, m => s(C.constant, m))
-      .replace(/\b(\d+\.?\d*)\b/g, m => s(C.number, m))
-      .replace(/^(\s*-\s)/gm, m => s(C.keyword, m))
-      .replace(/^---/gm, m => s(C.attr, m));
-  }
-
-  // ── Markdown ─────────────────────────────────────────────────────────────
-  if (['md','markdown'].includes(l)) {
-    return esc
-      .replace(/^(#{1,6}\s.*)/gm, m => s(C.classN, m))
-      .replace(/(\*\*.*?\*\*|__.*?__)/g, m => s('font-weight:700;color:#e2e8f0', m))
-      .replace(/(\*.*?\*|_.*?_)/g, m => s('font-style:italic;color:#e2e8f0', m))
-      .replace(/(`[^`]+`)/g, m => s(C.string, m))
-      .replace(/(\[.*?\]\(.*?\))/g, m => s(C.builtin, m))
-      .replace(/^(\s*[-*+]\s)/gm, m => s(C.keyword, m))
-      .replace(/^(\s*\d+\.\s)/gm, m => s(C.keyword, m))
-      .replace(/^(>.*)/gm, m => s(C.comment, m));
-  }
-
-  // ── Dockerfile ───────────────────────────────────────────────────────────
-  if (['dockerfile','docker'].includes(l)) {
-    return esc
-      .replace(/^#[^\n]*/gm, m => s(C.comment, m))
-      .replace(/^(FROM|RUN|CMD|LABEL|EXPOSE|ENV|ADD|COPY|ENTRYPOINT|VOLUME|USER|WORKDIR|ARG|ONBUILD|STOPSIGNAL|HEALTHCHECK|SHELL)\b/gm,
-               m => s(C.keyword, m))
-      .replace(/("(?:[^"\\]|\\.)*")/g, m => s(C.string, m))
-      .replace(/\$\{?[\w]+\}?/g, m => s(C.builtin, m));
-  }
-
-  // ── R ────────────────────────────────────────────────────────────────────
-  if (['r'].includes(l)) {
-    return esc
-      .replace(/#[^\n]*/g, m => s(C.comment, m))
-      .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, m => s(C.string, m))
-      .replace(/\b(if|else|for|while|repeat|break|next|return|function|in|TRUE|FALSE|NULL|NA|NA_integer_|NA_real_|NA_complex_|NA_character_|Inf|NaN|T|F)\b/g,
-               m => s(C.keyword, m))
-      .replace(/\b(c|list|data\.frame|matrix|array|vector|factor|library|require|source|print|cat|paste|paste0|sprintf|format|nchar|substr|toupper|tolower|gsub|sub|grep|grepl|strsplit|which|length|nrow|ncol|dim|sum|mean|sd|var|min|max|range|seq|rep|sample|set\.seed|apply|lapply|sapply|tapply|Map|Reduce|Filter|ggplot|aes|geom_point|geom_line|geom_bar|dplyr|tidyr|readr|tibble|mutate|filter|select|group_by|summarise|arrange|join)\b/g,
-               m => s(C.builtin, m))
-      .replace(/\b(\d+\.?\d*(?:[eE][+-]?\d+)?L?)\b/g, m => s(C.number, m))
-      .replace(/\b([a-zA-Z.][a-zA-Z0-9._]*)(?=\s*\()/g, m => s(C.func, m));
-  }
-
-  // ── MATLAB / Octave ───────────────────────────────────────────────────────
-  if (['matlab','m','octave'].includes(l)) {
-    return esc
-      .replace(/%[^\n]*/g, m => s(C.comment, m))
-      .replace(/\.\.\.[^\n]*/g, m => s(C.comment, m))
-      .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, m => s(C.string, m))
-      .replace(/\b(break|case|catch|continue|do|else|elseif|end|for|function|global|if|otherwise|parfor|persistent|return|spmd|switch|try|while|true|false|classdef|enumeration|events|methods|properties|true|false)\b/g,
-               m => s(C.keyword, m))
-      .replace(/\b(zeros|ones|eye|rand|randn|linspace|logspace|diag|repmat|reshape|size|length|numel|sum|prod|min|max|mean|std|var|sort|unique|find|ismember|intersect|union|plot|figure|subplot|xlabel|ylabel|title|legend|grid|hold|sprintf|fprintf|printf|disp|input|fopen|fclose|fread|fwrite|xlsread|xlswrite|csvread|csvwrite)\b/g,
-               m => s(C.builtin, m))
-      .replace(/\b(\d+\.?\d*(?:[eE][+-]?\d+)?[ij]?)\b/g, m => s(C.number, m))
-      .replace(/\b([a-zA-Z_][a-zA-Z0-9_]*)(?=\s*\()/g, m => s(C.func, m));
-  }
-
-  // ── TypeScript types / generics fallthrough handled by JS block above ────
-  return esc;
+  const l = (lang || '').toLowerCase();
+  const rules = _LANG_RULES[l];
+  if (!rules) return _escHtml(code);
+  const tokens = _tokenize(code, rules);
+  return _buildHtml(code, tokens);
 }
+
 
 // ─── KaTeX LOADER ────────────────────────────────────────────────────────────
 // Dynamically injects KaTeX CSS + JS from CDN once, then resolves
