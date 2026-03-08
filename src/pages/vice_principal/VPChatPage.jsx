@@ -9,15 +9,19 @@ const VPChatPage = ({ selectedClass }) => {
   const userId = localStorage.getItem('userId');
   const schoolId = localStorage.getItem('schoolId');
 
-  
+  const [classesManaging, setClassesManaging] = useState([]);
 
   useEffect(() => {
     const fetchVPDetails = async () => {
       if (!userId) return;
       const { data } = await supabase
         .from('vice_principals')
+        .select('classes_managing')
         .eq('id', userId)
         .single();
+      if (data && data.classes_managing) {
+        setClassesManaging(data.classes_managing);
+      }
     };
     fetchVPDetails();
   }, [userId]);
@@ -27,6 +31,8 @@ const VPChatPage = ({ selectedClass }) => {
 
   const relatedContext = {
     schoolId: schoolId ? parseInt(schoolId) : null,
+    classesManaging: classesManaging,
+    classId: selectedClass,
   };
 
   return (
