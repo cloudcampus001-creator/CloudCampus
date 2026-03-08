@@ -264,30 +264,85 @@ function highlightCode(code, lang) {
   return esc;
 }
 
-// Convert LaTeX-style math to a styled display
+// ─── KaTeX LOADER ────────────────────────────────────────────────────────────
+// Dynamically injects KaTeX CSS + JS from CDN once, then resolves
+const KATEX_VERSION = '0.16.9';
+let katexReady = null; // singleton promise
+
+function loadKaTeX() {
+  if (katexReady) return katexReady;
+  katexReady = new Promise((resolve) => {
+    // CSS
+    if (!document.getElementById('katex-css')) {
+      const link = document.createElement('link');
+      link.id   = 'katex-css';
+      link.rel  = 'stylesheet';
+      link.href = `https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/katex.min.css`;
+      document.head.appendChild(link);
+    }
+    // JS — only if not already there
+    if (window.katex) { resolve(window.katex); return; }
+    const script  = document.createElement('script');
+    script.src    = `https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/katex.min.js`;
+    script.async  = true;
+    script.onload = () => resolve(window.katex);
+    script.onerror = () => resolve(null); // fail silently
+    document.head.appendChild(script);
+  });
+  return katexReady;
+}
+
+// ─── MathBlock — renders real LaTeX via KaTeX ─────────────────────────────────
 function MathBlock({ content, inline }) {
+  const [html, setHtml]   = useState('');
+  const [ready, setReady] = useState(!!window.katex);
+
+  useEffect(() => {
+    if (!ready) {
+      loadKaTeX().then(k => { if (k) setReady(true); });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!ready || !window.katex) return;
+    try {
+      const rendered = window.katex.renderToString(content, {
+        displayMode: !inline,
+        throwOnError: false,
+        strict: false,
+        trust: false,
+        output: 'html',
+        macros: { '\\R': '\\mathbb{R}', '\\N': '\\mathbb{N}', '\\Z': '\\mathbb{Z}' },
+      });
+      setHtml(rendered);
+    } catch (e) {
+      setHtml(`<span style="color:#fbbf24;font-family:monospace">${content}</span>`);
+    }
+  }, [content, inline, ready]);
+
+  // Fallback while KaTeX loads
+  if (!html) {
+    const fallbackStyle = inline
+      ? { background:'rgba(251,191,36,0.12)', border:'1px solid rgba(251,191,36,0.35)', color:'#fbbf24', fontFamily:'monospace', padding:'1px 8px', borderRadius:4, fontSize:'0.85rem', display:'inline' }
+      : { background:'rgba(15,12,41,0.7)', border:'1px solid rgba(251,191,36,0.3)', borderLeft:'3px solid #f59e0b', padding:'12px 16px', borderRadius:8, color:'#fde68a', fontFamily:'monospace', textAlign:'center', overflowX:'auto', margin:'10px 0' };
+    return <span style={fallbackStyle}>{content}</span>;
+  }
+
   if (inline) {
     return (
       <span
-        style={{ background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', color: '#fbbf24', fontFamily: 'monospace' }}
-        className="inline-flex items-center mx-1 px-2 py-0.5 rounded text-sm font-semibold"
-      >
-        {content}
-      </span>
+        className="katex-inline mx-0.5"
+        style={{ display:'inline', verticalAlign:'middle' }}
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
     );
   }
+
   return (
     <div
-      style={{ background: 'rgba(15,12,41,0.7)', border: '1px solid rgba(251,191,36,0.3)', borderLeft: '3px solid #f59e0b' }}
-      className="my-3 p-4 rounded-xl overflow-x-auto shadow-lg"
-    >
-      <div
-        style={{ color: '#fde68a', fontFamily: 'monospace', fontSize: '0.9rem', lineHeight: '1.8', letterSpacing: '0.02em' }}
-        className="text-center whitespace-pre"
-      >
-        {content}
-      </div>
-    </div>
+      style={{ background:'rgba(15,12,41,0.8)', border:'1px solid rgba(255,255,255,0.08)', borderLeft:'3px solid #f59e0b', borderRadius:12, padding:'16px 20px', margin:'12px 0', overflowX:'auto', boxShadow:'0 4px 20px rgba(0,0,0,0.3)' }}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
   );
 }
 
@@ -692,7 +747,11 @@ const CloudAIPage = () => {
   // ─── RENDER ──────────────────────────────────────────────────────────────
   return (
     <>
-      <Helmet><title>Cloud AI — Axion Enterprise</title></Helmet>
+      <Helmet>
+        <title>Cloud AI — Axion Enterprise</title>
+        {/* KaTeX rendered math should be white on dark backgrounds */}
+        <style>{`.katex { color: #e2e8f0 !important; } .katex-display { color: #e2e8f0 !important; }`}</style>
+      </Helmet>
 
       <div className="min-h-screen bg-background flex flex-col relative overflow-hidden">
 
