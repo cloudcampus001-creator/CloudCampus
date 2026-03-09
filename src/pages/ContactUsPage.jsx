@@ -71,7 +71,7 @@ const ContactUsPage = () => {
                 <MapPin className="w-6 h-6 text-indigo-500 mt-1" />
                 <div>
                   <h3 className="font-semibold">Headquarters</h3>
-                  <p className="text-sm text-muted-foreground">123 Innovation Blvd, Tech District<br />Cloud City, CC 90210</p>
+                  <p className="text-sm text-muted-foreground">Mendong, Yaounde<br />Cameroon, © 2025 CloudCampus</p>
                 </div>
               </div>
               
@@ -79,7 +79,7 @@ const ContactUsPage = () => {
                 <Mail className="w-6 h-6 text-purple-500 mt-1" />
                 <div>
                   <h3 className="font-semibold">Email Us</h3>
-                  <p className="text-sm text-muted-foreground">support@cloudcampus.com</p>
+                  <p className="text-sm text-muted-foreground">cloudcampus001@gmail.com</p>
                 </div>
               </div>
 
@@ -87,7 +87,7 @@ const ContactUsPage = () => {
                 <Phone className="w-6 h-6 text-pink-500 mt-1" />
                 <div>
                   <h3 className="font-semibold">Call Us</h3>
-                  <p className="text-sm text-muted-foreground">+1 (555) 123-4567</p>
+                  <p className="text-sm text-muted-foreground">+237 654 84 05 42</p>
                 </div>
               </div>
             </div>
