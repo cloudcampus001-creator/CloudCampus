@@ -1,8 +1,6 @@
 import React from 'react';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
-import { 
-  Home, FileText, Users, AlertTriangle, LogOut, Menu, User, Cloud, CheckSquare, Scale, MessageSquare
-} from 'lucide-react';
+import { Home, FileText, LogOut, Menu, Cloud, CheckSquare, Scale, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
@@ -10,176 +8,99 @@ import { LogoDropdown } from '@/components/LogoDropdown';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
-import { motion } from 'framer-motion';
-
+import { motion, AnimatePresence } from 'framer-motion';
+import { useDeviceNotifications } from '@/hooks/useDeviceNotifications';
+import ProfileSheet from '@/components/ProfileSheet';
 import DisciplineHome from '@/pages/discipline/DisciplineHome';
 import RegisterReviewPage from '@/pages/discipline/RegisterReviewPage';
 import PunishPage from '@/pages/discipline/PunishPage';
 import JustificationsPage from '@/pages/discipline/JustificationsPage';
 import DisciplineChatPage from '@/pages/discipline/DisciplineChatPage';
-import { useDeviceNotifications } from '@/hooks/useDeviceNotifications';
+
+const getInitials = (name = '') => name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'DM';
+const ACCENT = { from: 'from-orange-500', to: 'to-red-500', glow: 'shadow-orange-500/40', text: 'text-orange-400', ring: 'ring-orange-500/30', mobileActive: 'bg-orange-500/15', iconGlow: 'drop-shadow-[0_0_8px_rgba(249,115,22,0.9)]' };
 
 const DisciplineDashboard = () => {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const { signOut } = useAuth();
-  const { t } = useLanguage();
+  const location = useLocation(); const navigate = useNavigate(); const { signOut } = useAuth(); const { t } = useLanguage();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
-
-  // Invisible — requests push permission + signals device on new notifications
+  const [profileOpen, setProfileOpen] = React.useState(false);
   useDeviceNotifications();
-  
   const userName = localStorage.getItem('userName') || 'Discipline Master';
-
   const navItems = [
-    { icon: Home, label: t('overview'), path: '/dashboard/discipline' },
-    { icon: CheckSquare, label: t('registerReview'), path: '/dashboard/discipline/registers' },
-    { icon: Scale, label: t('punishments'), path: '/dashboard/discipline/punishments' },
-    { icon: FileText, label: t('justifications'), path: '/dashboard/discipline/justifications' },
-    { icon: MessageSquare, label: t('chat'), path: '/dashboard/discipline/chat' },
+    { icon: Home, label: t('overview'), path: '/dashboard/discipline', shortLabel: 'Home' },
+    { icon: CheckSquare, label: t('registerReview'), path: '/dashboard/discipline/registers', shortLabel: 'Register' },
+    { icon: Scale, label: t('punishments'), path: '/dashboard/discipline/punishments', shortLabel: 'Punish' },
+    { icon: FileText, label: t('justifications'), path: '/dashboard/discipline/justifications', shortLabel: 'Justify' },
+    { icon: MessageSquare, label: t('chat'), path: '/dashboard/discipline/chat', shortLabel: 'Chat' },
   ];
-
-  const handleSignOut = async () => {
-    await signOut();
-    localStorage.clear();
-    navigate('/');
-  };
-
-  const isPathActive = (path) => {
-    if (path === '/dashboard/discipline' && location.pathname === '/dashboard/discipline') return true;
-    if (path !== '/dashboard/discipline' && location.pathname.startsWith(path)) return true;
-    return false;
-  };
+  const handleSignOut = async () => { await signOut(); localStorage.clear(); navigate('/'); };
+  const isActive = (p) => p === '/dashboard/discipline' ? location.pathname === p : location.pathname.startsWith(p);
 
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row font-sans selection:bg-orange-500 selection:text-white">
-      {/* Desktop Sidebar */}
-      <motion.aside 
-        initial={false}
-        animate={{ width: isSidebarOpen ? 280 : 80 }}
-        className={cn(
-          "hidden md:flex flex-col border-r border-white/10 bg-card/30 backdrop-blur-xl h-screen sticky top-0 z-40 shadow-2xl",
-        )}
-      >
-        <div className="p-6 flex items-center justify-between">
-          {isSidebarOpen && (
-             <motion.div 
-               initial={{ opacity: 0 }} 
-               animate={{ opacity: 1 }} 
-             >
-               <LogoDropdown>
-                 <div className="flex items-center gap-2 font-bold text-xl bg-clip-text text-transparent bg-gradient-to-r from-orange-500 to-red-500">
-                   <Cloud className="text-orange-500 h-6 w-6" />
-                   <span>Cloud<span className="text-foreground">Campus</span></span>
-                 </div>
-               </LogoDropdown>
-             </motion.div>
-          )}
-          <Button variant="ghost" size="icon" onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="text-muted-foreground hover:text-orange-500">
-            <Menu className="h-6 w-6" />
-          </Button>
+      <motion.aside initial={false} animate={{ width: isSidebarOpen ? 272 : 72 }} transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+        className="hidden md:flex flex-col border-r border-white/10 bg-card/30 backdrop-blur-xl h-screen sticky top-0 z-40 shadow-2xl overflow-visible">
+        <div className="p-5 flex items-center justify-between h-[72px] shrink-0">
+          <AnimatePresence>{isSidebarOpen && (<motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2 }}>
+            <LogoDropdown><div className={`flex items-center gap-2 font-bold text-xl bg-clip-text text-transparent bg-gradient-to-r ${ACCENT.from} ${ACCENT.to}`}><Cloud className="text-orange-500 h-6 w-6" /><span>Cloud<span className="text-foreground">Campus</span></span></div></LogoDropdown>
+          </motion.div>)}</AnimatePresence>
+          <Button variant="ghost" size="icon" onClick={() => setIsSidebarOpen(o => !o)} className="text-muted-foreground hover:text-orange-400 shrink-0 hover:bg-orange-500/10 rounded-xl"><Menu className="h-5 w-5" /></Button>
         </div>
-
-        <div className="px-4 py-2">
-            {isSidebarOpen && <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4 px-2">{t('menu')}</p>}
-            <nav className="space-y-2">
-            {navItems.map((item) => (
-                <Link key={item.path} to={item.path}>
-                <div
-                    className={cn(
-                    "flex items-center p-3 rounded-xl transition-all duration-300 group relative overflow-hidden",
-                    isPathActive(item.path) 
-                        ? "bg-orange-500 text-white shadow-lg shadow-orange-500/30" 
-                        : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
-                    )}
-                >
-                    <item.icon className={cn("h-5 w-5 z-10", isSidebarOpen && "mr-3")} />
-                    {isSidebarOpen && <span className="font-medium z-10">{item.label}</span>}
-                    
-                    {!isPathActive(item.path) && (
-                        <div className="absolute inset-0 bg-gradient-to-r from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                    )}
-                </div>
-                </Link>
-            ))}
-            </nav>
+        <div className="px-3 py-2 flex-1 overflow-y-auto overflow-x-visible">
+          {isSidebarOpen && <p className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-[0.15em] mb-3 px-2">{t('menu')}</p>}
+          <nav className="space-y-1">{navItems.map((item) => { const active = isActive(item.path); return (
+            <Link key={item.path} to={item.path} className="relative group block">
+              <div className={cn('flex items-center rounded-xl transition-all duration-200 relative overflow-visible', isSidebarOpen ? 'px-3 py-2.5' : 'px-0 py-2.5 justify-center', active ? `bg-gradient-to-r ${ACCENT.from} ${ACCENT.to} text-white shadow-lg ${ACCENT.glow}` : 'text-muted-foreground hover:text-foreground hover:bg-white/5')}>
+                {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full bg-white/60" />}
+                <item.icon className={cn('h-[18px] w-[18px] shrink-0 transition-all', isSidebarOpen ? 'mr-3' : 'mx-auto', active && 'drop-shadow-[0_0_6px_rgba(255,255,255,0.6)]')} />
+                {isSidebarOpen && <span className="font-medium text-sm leading-none">{item.label}</span>}
+                {!isSidebarOpen && <span className="pointer-events-none absolute left-full ml-3 px-2.5 py-1.5 text-xs font-semibold bg-card/95 border border-white/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-150 whitespace-nowrap z-[9999] shadow-xl backdrop-blur-md translate-x-1 group-hover:translate-x-0">{item.label}</span>}
+              </div>
+            </Link>
+          ); })}</nav>
         </div>
-
-        <div className="mt-auto p-6 border-t border-white/5 space-y-4">
-          <div className={cn("flex items-center justify-between", !isSidebarOpen && "flex-col gap-4")}>
-             <div className="flex gap-2">
-                <ThemeToggle />
-                <LanguageSwitcher />
-             </div>
-             {isSidebarOpen && (
-                 <div className="flex items-center gap-3">
-                    <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-orange-500 to-red-500 flex items-center justify-center text-white font-bold">
-                        <User className="w-4 h-4" />
-                    </div>
-                    <div className="text-sm">
-                        <p className="font-medium leading-none truncate max-w-[120px]">{userName}</p>
-                    </div>
-                 </div>
-             )}
+        <div className="p-4 border-t border-white/5 space-y-3 shrink-0">
+          <div className={cn('flex items-center gap-2', !isSidebarOpen && 'flex-col')}>
+            <ThemeToggle /><LanguageSwitcher />
+            {isSidebarOpen ? (
+              <button onClick={() => setProfileOpen(true)} className={`ml-auto flex items-center gap-2.5 ring-1 ${ACCENT.ring} rounded-xl px-2.5 py-1.5 hover:bg-white/5 transition-all active:scale-95`}>
+                <div className={`h-7 w-7 rounded-full bg-gradient-to-tr ${ACCENT.from} ${ACCENT.to} flex items-center justify-center text-white text-xs font-bold shrink-0`}>{getInitials(userName)}</div>
+                <div className="text-sm overflow-hidden text-left"><p className="font-semibold leading-none truncate max-w-[90px]">{userName}</p><p className="text-[10px] text-muted-foreground mt-0.5">Discipline Master</p></div>
+              </button>
+            ) : (
+              <button onClick={() => setProfileOpen(true)} className={`h-9 w-9 rounded-full bg-gradient-to-tr ${ACCENT.from} ${ACCENT.to} flex items-center justify-center text-white text-xs font-bold hover:opacity-80 active:scale-95`}>{getInitials(userName)}</button>
+            )}
           </div>
-          
-          <Button 
-            variant="destructive" 
-            className={cn("w-full justify-start bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20", !isSidebarOpen && "justify-center px-2")}
-            onClick={handleSignOut}
-          >
-            <LogOut className={cn("h-5 w-5", isSidebarOpen && "mr-2")} />
-            {isSidebarOpen && <span>{t('logout')}</span>}
-          </Button>
+          <Button onClick={handleSignOut} className={cn('w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl', isSidebarOpen ? 'justify-start' : 'justify-center px-2')}><LogOut className={cn('h-4 w-4', isSidebarOpen && 'mr-2')} />{isSidebarOpen && <span className="text-sm">{t('logout')}</span>}</Button>
         </div>
       </motion.aside>
-
-      {/* Mobile Header */}
-      <div className="md:hidden flex items-center justify-between p-4 border-b border-white/10 bg-card/80 backdrop-blur-xl sticky top-0 z-50">
-        <LogoDropdown>
-          <div className="flex items-center gap-2 font-bold text-lg">
-            <Cloud className="text-orange-500 h-5 w-5" />
-            <span>CloudCampus</span>
-          </div>
-        </LogoDropdown>
-        <div className="flex gap-2">
-          <LanguageSwitcher />
-          <ThemeToggle />
-          <Button variant="ghost" size="icon" onClick={handleSignOut}>
-            <LogOut className="h-5 w-5" />
-          </Button>
+      <div className="md:hidden flex items-center justify-between px-4 h-14 border-b border-white/10 bg-card/80 backdrop-blur-xl sticky top-0 z-50">
+        <LogoDropdown><div className={`flex items-center gap-2 font-bold text-base bg-clip-text text-transparent bg-gradient-to-r ${ACCENT.from} ${ACCENT.to}`}><Cloud className="text-orange-500 h-5 w-5" /><span>CloudCampus</span></div></LogoDropdown>
+        <div className="flex items-center gap-1.5"><LanguageSwitcher /><ThemeToggle />
+          <button onClick={() => setProfileOpen(true)} className={`h-8 w-8 rounded-full bg-gradient-to-tr ${ACCENT.from} ${ACCENT.to} flex items-center justify-center text-white text-xs font-bold`}>{getInitials(userName)}</button>
         </div>
       </div>
-
-      {/* Main Content */}
-      <main className="flex-1 p-4 md:p-8 pb-24 md:pb-8 overflow-y-auto h-[calc(100vh-65px)] md:h-screen scroll-smooth">
+      <main className="flex-1 p-4 md:p-8 pb-28 md:pb-8 overflow-y-auto h-[calc(100vh-56px)] md:h-screen scroll-smooth">
         <Routes>
-          <Route path="/" element={<DisciplineHome />} />
-          <Route path="/registers" element={<RegisterReviewPage />} />
-          <Route path="/punishments" element={<PunishPage />} />
-          <Route path="/justifications" element={<JustificationsPage />} />
-          <Route path="/chat" element={<DisciplineChatPage />} />
-          <Route path="*" element={<DisciplineHome />} />
+          <Route path="/" element={<DisciplineHome />} /><Route path="/registers" element={<RegisterReviewPage />} />
+          <Route path="/punishments" element={<PunishPage />} /><Route path="/justifications" element={<JustificationsPage />} />
+          <Route path="/chat" element={<DisciplineChatPage />} /><Route path="*" element={<DisciplineHome />} />
         </Routes>
       </main>
-
-      {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card/90 backdrop-blur-xl border-t border-white/10 flex justify-around p-2 z-50 safe-area-pb shadow-[0_-10px_20px_rgba(0,0,0,0.2)]">
-        {navItems.map((item) => (
-          <Link key={item.path} to={item.path} className="flex-1">
-            <div 
-              className={cn(
-                "flex flex-col items-center justify-center p-2 rounded-xl transition-all",
-                isPathActive(item.path) ? "text-orange-500 scale-110" : "text-muted-foreground"
-              )}
-            >
-              <item.icon className="h-6 w-6 mb-1" />
-            </div>
-          </Link>
-        ))}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 px-3 pb-3">
+        <div className="bg-card/80 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.35)] overflow-hidden">
+          <div className="flex items-stretch px-1 py-1">{navItems.map((item) => { const active = isActive(item.path); return (
+            <Link key={item.path} to={item.path} className="flex-1 min-w-0">
+              <div className={cn('flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all duration-300 gap-0.5', active ? ACCENT.mobileActive : 'hover:bg-white/5')}>
+                <item.icon className={cn('h-[18px] w-[18px] transition-all duration-300', active ? `${ACCENT.text} ${ACCENT.iconGlow} scale-110` : 'text-muted-foreground')} />
+                <span className={cn('text-[9px] font-semibold leading-none truncate w-full text-center', active ? ACCENT.text : 'text-muted-foreground')}>{item.shortLabel}</span>
+              </div>
+            </Link>
+          ); })}</div>
+        </div>
       </nav>
+      <ProfileSheet open={profileOpen} onClose={() => setProfileOpen(false)} userName={userName} roleLabel="Discipline Master" accentFrom={ACCENT.from} accentTo={ACCENT.to} onSignOut={handleSignOut} />
     </div>
   );
 };
-
 export default DisciplineDashboard;
