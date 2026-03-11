@@ -1,4 +1,3 @@
-
 export const translations = {
   en: {
     // --- COMMON ACTIONS ---
@@ -27,7 +26,7 @@ export const translations = {
     refresh: "Refresh",
     filter: "Filter",
     all: "All",
-    
+
     // --- FILE HANDLING ---
     fileSelected: "File selected:",
     removeFile: "Remove file",
@@ -36,7 +35,7 @@ export const translations = {
     fileSizeTooBig: "File size too big (max 5MB)",
     document: "Document",
     sharedImage: "Shared image",
-    
+
     // --- NAVIGATION / DASHBOARD SECTIONS ---
     dashboard: "Dashboard",
     overview: "Overview",
@@ -66,7 +65,7 @@ export const translations = {
     noClasses: "No classes assigned",
     settings: "Settings",
     profile: "Profile",
-    
+
     // --- LANDING / PUBLIC PAGES ---
     cloudAI: "Cloud AI",
     aboutUs: "About Us",
@@ -88,7 +87,7 @@ export const translations = {
     selectRole: "Select Role",
     selectSchool: "Select School",
     welcome: "Welcome",
-    
+
     // --- CLOUD AI ---
     aiWelcome: "Hello! I'm your CloudCampus AI assistant.",
     aiWelcomeDesc: "I can help you with homework, explain complex topics, or assist with school administration tasks. Ask me anything!",
@@ -96,7 +95,7 @@ export const translations = {
     aiThinking: "Thinking...",
     aiError: "I encountered an error. Please try again.",
     clearChat: "Clear Chat",
-    
+
     // --- CHAT & COMMUNICATIONS ---
     chats: "Chats",
     newChat: "New Chat",
@@ -120,7 +119,7 @@ export const translations = {
     startNewChat: "Start New Chat",
     welcomeChat: "Welcome to Messages",
     chatWelcomeDesc: "Select a conversation from the sidebar or start a new chat to connect with teachers, parents, and school staff.",
-    
+
     // --- ROLES & IDENTITIES ---
     role_parent: "Parent",
     role_teacher: "Teacher",
@@ -139,7 +138,7 @@ export const translations = {
     staff: "Staff",
     parentOf: "Parent of",
     vpOf: "VP of",
-    
+
     // --- ACADEMIC TERMS ---
     term: "Term",
     semester: "Semester",
@@ -159,15 +158,112 @@ export const translations = {
     absent: "Absent",
     excused: "Excused",
     unexcused: "Unexcused",
-    
+
     // --- SETTINGS ---
     language: "Language",
     english: "English",
     french: "Français",
     theme: "Theme",
     light: "Light",
-    dark: "Dark"
+    dark: "Dark",
+
+    // ─── PARENT PORTAL ──────────────────────────────────────
+    notifications: "Notifications",
+    notificationsShort: "Alerts",
+    viewAllNotifications: "View all notifications",
+    noNotifications: "No notifications yet",
+    noNotificationsDesc: "You're all caught up! School updates will appear here.",
+    unreadNotifications: "unread",
+    newNotification: "New notification",
+    allRead: "All read",
+    markAllRead: "Mark all read",
+    notifSchoolWide: "School-wide",
+    notifYourClass: "Your Class",
+    notifPersonal: "Personal",
+    notifFrom: "From",
+    notifAttachment: "View Attachment",
+    notifJustNow: "Just now",
+    notifToday: "Today",
+    notifYesterday: "Yesterday",
+
+    // Greetings
+    goodMorning: "Good morning",
+    goodAfternoon: "Good afternoon",
+    goodEvening: "Good evening",
+    hereIsWhat: "Here's what's happening with",
+    today: "today",
+
+    // Stats
+    activeAssignments: "Active Assignments",
+    dueTerm: "Due this term",
+    libraryBooks: "Library Books",
+    availableNow: "Available now",
+    unjustifiedAbsences: "Unjustified Absences",
+    perfectAttendance: "Perfect attendance! 🎉",
+    submitJustificationHint: "Submit a justification to resolve",
+
+    // Charts
+    absenceTrend: "Absence Trend",
+    hoursPerMonth: "Hours per month",
+    studyMaterials: "Study Materials",
+    docsPerSubject: "Documents per subject",
+    noDocumentsYet: "No documents yet",
+
+    // Quick actions
+    quickActions: "Quick Actions",
+    jumpToSection: "Jump to any section",
+    seeAllUpdates: "See all school updates",
+    accessDocuments: "Access class documents",
+    submitJustification: "Submit justifications",
+    downloadTextbooks: "Download textbooks",
+    talkToTeachers: "Talk to teachers",
+
+    // Documents page
+    allFiles: "All Files",
+    notesSlides: "Notes & Slides",
+    assignments: "Assignments",
+    searchFilesSubjects: "Search files or subjects…",
+    noFilesYet: "No files yet",
+    teacherNoUpload: "Your teacher hasn't uploaded anything yet.",
+    searchNoResults: "No results for",
+    previewDoc: "Preview",
+
+    // Library page
+    schoolLibrary: "School Library",
+    searchBooksAuthors: "Search books or authors…",
+    libraryEmpty: "Library is empty",
+    libraryEmptyDesc: "No books published yet — check back soon!",
+    noBooksMatch: "No books match",
+    addedOn: "Added",
+    author: "Author",
+    openNewTab: "Open in new tab",
+    bookDetails: "Book Details",
+
+    // Discipline page
+    disciplineCentre: "Discipline Centre",
+    disciplineDesc: "Absences, justifications and conduct records.",
+    unjustifiedAbsenceHours: "Unjustified Absence Hours",
+    noPunishments: "No records — keep it up! 🎉",
+    justifyAbsences: "Justify Absences",
+    sentToDM: "Sent directly to the Discipline Master",
+    justificationMessage: "Message",
+    attachDocument: "Attach a document (optional)",
+    attachFilePlaceholder: "Attach a file (PDF, image…)",
+    submitting: "Submitting…",
+    submitSuccess: "Justification submitted successfully.",
+    submitError: "Failed to submit. Please try again.",
+    conductRecords: "Conduct Records",
+    tapForDetails: "Tap any entry for full details",
+    justificationHistory: "Justification History",
+    conductRecord: "Conduct Record",
+    reason: "Reason",
+    punishment: "Punishment",
+    reportedBy: "Reported by",
+    statusPending: "Pending",
+    statusApproved: "Approved",
+    statusRejected: "Rejected",
   },
+
   fr: {
     // --- COMMON ACTIONS ---
     loading: "Chargement...",
@@ -234,7 +330,7 @@ export const translations = {
     noClasses: "Aucune classe assignée",
     settings: "Paramètres",
     profile: "Profil",
-    
+
     // --- LANDING / PUBLIC PAGES ---
     cloudAI: "Cloud AI",
     aboutUs: "À propos",
@@ -264,7 +360,7 @@ export const translations = {
     aiThinking: "Réflexion...",
     aiError: "J'ai rencontré une erreur. Veuillez réessayer.",
     clearChat: "Effacer la discussion",
-    
+
     // --- CHAT & COMMUNICATIONS ---
     chats: "Discussions",
     newChat: "Nouvelle discussion",
@@ -288,7 +384,7 @@ export const translations = {
     startNewChat: "Nouvelle discussion",
     welcomeChat: "Bienvenue sur Messages",
     chatWelcomeDesc: "Sélectionnez une conversation ou démarrez un nouveau chat pour vous connecter avec les enseignants, les parents et le personnel.",
-    
+
     // --- ROLES & IDENTITIES ---
     role_parent: "Parent",
     role_teacher: "Enseignant",
@@ -307,7 +403,7 @@ export const translations = {
     staff: "Personnel",
     parentOf: "Parent de",
     vpOf: "Censeur de",
-    
+
     // --- ACADEMIC TERMS ---
     term: "Trimestre",
     semester: "Semestre",
@@ -334,6 +430,102 @@ export const translations = {
     french: "Français",
     theme: "Thème",
     light: "Clair",
-    dark: "Sombre"
+    dark: "Sombre",
+
+    // ─── PORTAIL PARENT ──────────────────────────────────────
+    notifications: "Notifications",
+    notificationsShort: "Alertes",
+    viewAllNotifications: "Voir toutes les notifications",
+    noNotifications: "Aucune notification",
+    noNotificationsDesc: "Vous êtes à jour ! Les mises à jour de l'école apparaîtront ici.",
+    unreadNotifications: "non lues",
+    newNotification: "Nouvelle notification",
+    allRead: "Tout lu",
+    markAllRead: "Tout marquer comme lu",
+    notifSchoolWide: "École entière",
+    notifYourClass: "Votre classe",
+    notifPersonal: "Personnel",
+    notifFrom: "De",
+    notifAttachment: "Voir la pièce jointe",
+    notifJustNow: "À l'instant",
+    notifToday: "Aujourd'hui",
+    notifYesterday: "Hier",
+
+    // Salutations
+    goodMorning: "Bonjour",
+    goodAfternoon: "Bon après-midi",
+    goodEvening: "Bonsoir",
+    hereIsWhat: "Voici ce qui se passe avec",
+    today: "aujourd'hui",
+
+    // Statistiques
+    activeAssignments: "Devoirs actifs",
+    dueTerm: "Ce trimestre",
+    libraryBooks: "Livres disponibles",
+    availableNow: "Disponibles maintenant",
+    unjustifiedAbsences: "Absences injustifiées",
+    perfectAttendance: "Assiduité parfaite ! 🎉",
+    submitJustificationHint: "Soumettre une justification",
+
+    // Graphiques
+    absenceTrend: "Tendance des absences",
+    hoursPerMonth: "Heures par mois",
+    studyMaterials: "Supports de cours",
+    docsPerSubject: "Documents par matière",
+    noDocumentsYet: "Aucun document encore",
+
+    // Actions rapides
+    quickActions: "Accès rapide",
+    jumpToSection: "Accédez à n'importe quelle section",
+    seeAllUpdates: "Voir toutes les mises à jour",
+    accessDocuments: "Accéder aux documents de classe",
+    submitJustification: "Soumettre une justification",
+    downloadTextbooks: "Télécharger des manuels",
+    talkToTeachers: "Parler aux enseignants",
+
+    // Page Documents
+    allFiles: "Tous les fichiers",
+    notesSlides: "Notes & Diaporamas",
+    assignments: "Devoirs",
+    searchFilesSubjects: "Rechercher fichiers ou matières…",
+    noFilesYet: "Aucun fichier pour l'instant",
+    teacherNoUpload: "Votre enseignant n'a rien téléversé encore.",
+    searchNoResults: "Aucun résultat pour",
+    previewDoc: "Aperçu",
+
+    // Page Bibliothèque
+    schoolLibrary: "Bibliothèque scolaire",
+    searchBooksAuthors: "Rechercher livres ou auteurs…",
+    libraryEmpty: "Bibliothèque vide",
+    libraryEmptyDesc: "Aucun livre publié pour l'instant — revenez bientôt !",
+    noBooksMatch: "Aucun livre ne correspond à",
+    addedOn: "Ajouté",
+    author: "Auteur",
+    openNewTab: "Ouvrir dans un nouvel onglet",
+    bookDetails: "Détails du livre",
+
+    // Page Discipline
+    disciplineCentre: "Centre Discipline",
+    disciplineDesc: "Absences, justifications et dossiers de conduite.",
+    unjustifiedAbsenceHours: "Heures d'absences injustifiées",
+    noPunishments: "Aucun dossier — continuez comme ça ! 🎉",
+    justifyAbsences: "Justifier les absences",
+    sentToDM: "Envoyé directement au Surveillant Général",
+    justificationMessage: "Message",
+    attachDocument: "Joindre un document (optionnel)",
+    attachFilePlaceholder: "Joindre un fichier (PDF, image…)",
+    submitting: "Envoi en cours…",
+    submitSuccess: "Justification soumise avec succès.",
+    submitError: "Échec de l'envoi. Veuillez réessayer.",
+    conductRecords: "Dossiers de conduite",
+    tapForDetails: "Appuyez pour voir les détails",
+    justificationHistory: "Historique des justifications",
+    conductRecord: "Dossier de conduite",
+    reason: "Motif",
+    punishment: "Punition",
+    reportedBy: "Signalé par",
+    statusPending: "En attente",
+    statusApproved: "Approuvé",
+    statusRejected: "Rejeté",
   }
 };
