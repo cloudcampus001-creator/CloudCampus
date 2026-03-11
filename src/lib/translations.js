@@ -36,7 +36,7 @@ export const translations = {
     document: "Document",
     sharedImage: "Shared image",
 
-    // --- NAVIGATION / DASHBOARD SECTIONS ---
+    // --- NAVIGATION ---
     dashboard: "Dashboard",
     overview: "Overview",
     documents: "Documents",
@@ -66,7 +66,7 @@ export const translations = {
     settings: "Settings",
     profile: "Profile",
 
-    // --- LANDING / PUBLIC PAGES ---
+    // --- LANDING / PUBLIC ---
     cloudAI: "Cloud AI",
     aboutUs: "About Us",
     contactUs: "Contact Us",
@@ -82,7 +82,7 @@ export const translations = {
     name: "Name",
     email: "Email",
     message: "Message",
-    contactDesc: "We'd love to hear from you. Send us a message and we'll respond as soon as possible.",
+    contactDesc: "We'd love to hear from you.",
     login: "Login",
     selectRole: "Select Role",
     selectSchool: "Select School",
@@ -90,13 +90,13 @@ export const translations = {
 
     // --- CLOUD AI ---
     aiWelcome: "Hello! I'm your CloudCampus AI assistant.",
-    aiWelcomeDesc: "I can help you with homework, explain complex topics, or assist with school administration tasks. Ask me anything!",
+    aiWelcomeDesc: "I can help you with homework, explain complex topics, or assist with school administration tasks.",
     askAnything: "Ask a question...",
     aiThinking: "Thinking...",
     aiError: "I encountered an error. Please try again.",
     clearChat: "Clear Chat",
 
-    // --- CHAT & COMMUNICATIONS ---
+    // --- CHAT ---
     chats: "Chats",
     newChat: "New Chat",
     typeMessage: "Type a message...",
@@ -108,9 +108,9 @@ export const translations = {
     sending: "Sending...",
     viewConversation: "View conversation",
     deleteMessageTitle: "Delete Message",
-    deleteMessageConfirm: "Are you sure you want to delete this message? This action cannot be undone.",
+    deleteMessageConfirm: "Are you sure you want to delete this message?",
     deleteChatTitle: "Delete Conversation",
-    deleteChatConfirm: "Are you sure you want to delete this entire conversation? All history will be lost.",
+    deleteChatConfirm: "Are you sure you want to delete this conversation?",
     conversationDeleted: "Conversation deleted",
     messageDeleted: "Message deleted",
     deleteError: "Could not delete item",
@@ -118,9 +118,9 @@ export const translations = {
     sendError: "Failed to send message",
     startNewChat: "Start New Chat",
     welcomeChat: "Welcome to Messages",
-    chatWelcomeDesc: "Select a conversation from the sidebar or start a new chat to connect with teachers, parents, and school staff.",
+    chatWelcomeDesc: "Select a conversation or start a new chat.",
 
-    // --- ROLES & IDENTITIES ---
+    // --- ROLES ---
     role_parent: "Parent",
     role_teacher: "Teacher",
     role_student: "Student",
@@ -138,6 +138,7 @@ export const translations = {
     staff: "Staff",
     parentOf: "Parent of",
     vpOf: "VP of",
+    subjectTeacher: "Teacher",
 
     // --- ACADEMIC TERMS ---
     term: "Term",
@@ -167,12 +168,12 @@ export const translations = {
     light: "Light",
     dark: "Dark",
 
-    // ─── PARENT PORTAL ──────────────────────────────────────
+    // ─── PARENT PORTAL ───────────────────────────────────────
     notifications: "Notifications",
     notificationsShort: "Alerts",
     viewAllNotifications: "View all notifications",
     noNotifications: "No notifications yet",
-    noNotificationsDesc: "You're all caught up! School updates will appear here.",
+    noNotificationsDesc: "You're all caught up! Updates will appear here.",
     unreadNotifications: "unread",
     newNotification: "New notification",
     allRead: "All read",
@@ -185,15 +186,11 @@ export const translations = {
     notifJustNow: "Just now",
     notifToday: "Today",
     notifYesterday: "Yesterday",
-
-    // Greetings
     goodMorning: "Good morning",
     goodAfternoon: "Good afternoon",
     goodEvening: "Good evening",
     hereIsWhat: "Here's what's happening with",
     today: "today",
-
-    // Stats
     activeAssignments: "Active Assignments",
     dueTerm: "Due this term",
     libraryBooks: "Library Books",
@@ -201,15 +198,11 @@ export const translations = {
     unjustifiedAbsences: "Unjustified Absences",
     perfectAttendance: "Perfect attendance! 🎉",
     submitJustificationHint: "Submit a justification to resolve",
-
-    // Charts
     absenceTrend: "Absence Trend",
     hoursPerMonth: "Hours per month",
     studyMaterials: "Study Materials",
     docsPerSubject: "Documents per subject",
     noDocumentsYet: "No documents yet",
-
-    // Quick actions
     quickActions: "Quick Actions",
     jumpToSection: "Jump to any section",
     seeAllUpdates: "See all school updates",
@@ -217,8 +210,6 @@ export const translations = {
     submitJustification: "Submit justifications",
     downloadTextbooks: "Download textbooks",
     talkToTeachers: "Talk to teachers",
-
-    // Documents page
     allFiles: "All Files",
     notesSlides: "Notes & Slides",
     assignments: "Assignments",
@@ -227,8 +218,6 @@ export const translations = {
     teacherNoUpload: "Your teacher hasn't uploaded anything yet.",
     searchNoResults: "No results for",
     previewDoc: "Preview",
-
-    // Library page
     schoolLibrary: "School Library",
     searchBooksAuthors: "Search books or authors…",
     libraryEmpty: "Library is empty",
@@ -238,8 +227,6 @@ export const translations = {
     author: "Author",
     openNewTab: "Open in new tab",
     bookDetails: "Book Details",
-
-    // Discipline page
     disciplineCentre: "Discipline Centre",
     disciplineDesc: "Absences, justifications and conduct records.",
     unjustifiedAbsenceHours: "Unjustified Absence Hours",
@@ -262,6 +249,100 @@ export const translations = {
     statusPending: "Pending",
     statusApproved: "Approved",
     statusRejected: "Rejected",
+
+    // ─── TEACHER PORTAL ──────────────────────────────────────
+    teacherDashboard: "Teacher Dashboard",
+    todaysClasses: "Today's Classes",
+    pendingELogs: "Pending e-Logs",
+    todaysTimetable: "Today's Timetable",
+    noClassesScheduled: "No classes scheduled for today.",
+    noActiveClass: "No Active Class",
+    noActiveClassDesc: "You don't have any scheduled classes right now. The activity page activates during your periods.",
+    activeClass: "Active Class",
+
+    // Notifications CTA (teacher home)
+    adminNotifications: "Admin Notifications",
+    adminNotificationsDesc: "Messages from school administration",
+    noAdminNotifs: "No notifications from administration yet.",
+
+    // Activity page
+    liveActivityTitle: "Live Activity",
+    eLogBook: "e-Log Book",
+    attendanceRegister: "Attendance Register",
+    topicTaught: "Topic Taught",
+    subTopics: "Sub-topics Dealt With",
+    signSendVP: "Sign & Send to VP",
+    attendanceNote: "Tap a student to mark them absent (shown in red).",
+    submitAttendance: "Submit Attendance",
+    absent_count: "Absent",
+    logSuccess: "e-Log signed and sent to Vice Principal.",
+    logError: "Failed to submit e-log.",
+    attendanceSuccess: "Attendance register submitted.",
+
+    // Marks page
+    enterMarks: "Enter Student Marks",
+    classLabel: "Class",
+    subjectSection: "Subject / Section",
+    sequence: "Sequence",
+    seq1: "1st Sequence",
+    seq2: "2nd Sequence",
+    seq3: "3rd Sequence",
+    seq4: "4th Sequence",
+    seq5: "5th Sequence",
+    seq6: "6th Sequence",
+    totalMarks: "Total",
+    studentMarks: "Student Marks",
+    studentsEnrolled: "students enrolled",
+    noStudentsEnrolled: "No students enrolled for this subject.",
+    marksExistWarning: "Marks Already Exist",
+    marksExistDesc: "Marks for this subject and sequence already exist. Saving will permanently replace them.",
+    yesReplace: "Yes, Replace Marks",
+    fillWithZero: "Fill with 0",
+    fillZeroTitle: "Fill Missing Marks with 0",
+    fillZeroDesc: "students have no mark yet. Set their mark to 0?",
+    savingMarks: "Saving…",
+    saveMarks: "Save Marks",
+    marksExistBanner: "Marks already exist for this combination — saving will replace all existing data.",
+    missingMarksBanner: "students have no mark entered yet.",
+    selectClassFirst: "— pick class first —",
+    selectSubjectFirst: "— pick subject first —",
+    selectClass: "Select class",
+    selectSubject: "Select subject",
+    selectSequence: "Select sequence",
+    marksSaved: "Marks saved successfully.",
+    marksError: "Failed to save marks.",
+
+    // Publish (merged) page
+    publishCenter: "Publish Center",
+    publishCenterDesc: "Share materials or notify parents instantly",
+    publishWhat: "What would you like to publish?",
+    publishDocument: "Document",
+    publishDocumentDesc: "Upload notes, assignments or exams for your class",
+    publishNotification: "Notification",
+    publishNotificationDesc: "Send an announcement directly to parents",
+    documentType: "Document Type",
+    material: "Material",
+    targetClass: "Target Class",
+    subjectTitle: "Subject / Title",
+    uploadFile: "Upload File",
+    uploadFileDrop: "Drop your file here",
+    uploadFileSupport: "Supports PDF, DOCX, Images (Max 50MB)",
+    publishNow: "Publish Now",
+    publishing: "Publishing...",
+    publishSuccess: "Document published and parents notified.",
+    publishError: "Failed to publish. Please try again.",
+    recipientType: "Recipient Type",
+    individual: "Individual",
+    wholeClass: "Whole Class",
+    allMyClasses: "All My Classes",
+    selectStudent: "Select Student",
+    notifTitle: "Subject / Title",
+    notifMessage: "Message Content",
+    notifMessagePlaceholder: "Write your message here...",
+    sendNotification: "Send Notification",
+    notifSent: "Notification sent successfully.",
+    notifError: "Failed to send notification.",
+    fileTooLarge: "File too large — limit is 50MB.",
   },
 
   fr: {
@@ -301,7 +382,7 @@ export const translations = {
     document: "Document",
     sharedImage: "Image partagée",
 
-    // --- NAVIGATION / DASHBOARD SECTIONS ---
+    // --- NAVIGATION ---
     dashboard: "Tableau de bord",
     overview: "Aperçu",
     documents: "Documents",
@@ -331,7 +412,7 @@ export const translations = {
     settings: "Paramètres",
     profile: "Profil",
 
-    // --- LANDING / PUBLIC PAGES ---
+    // --- LANDING ---
     cloudAI: "Cloud AI",
     aboutUs: "À propos",
     contactUs: "Contactez-nous",
@@ -339,7 +420,7 @@ export const translations = {
     platformFeatures: "Fonctionnalités",
     getInTouch: "Contact",
     sendMessage: "Envoyer un message",
-    missionText: "Révolutionner la gestion scolaire grâce à des solutions cloud intuitives connectant enseignants, parents et administrateurs.",
+    missionText: "Révolutionner la gestion scolaire grâce à des solutions cloud intuitives.",
     feature1: "Communication en temps réel",
     feature2: "Suivi complet des notes",
     feature3: "Gestion sécurisée des documents",
@@ -347,7 +428,7 @@ export const translations = {
     name: "Nom",
     email: "Email",
     message: "Message",
-    contactDesc: "Nous aimerions avoir de vos nouvelles. Envoyez-nous un message et nous vous répondrons dès que possible.",
+    contactDesc: "Nous aimerions avoir de vos nouvelles.",
     login: "Connexion",
     selectRole: "Choisir un rôle",
     selectSchool: "Choisir une école",
@@ -355,13 +436,13 @@ export const translations = {
 
     // --- CLOUD AI ---
     aiWelcome: "Bonjour ! Je suis votre assistant CloudCampus.",
-    aiWelcomeDesc: "Je peux vous aider avec les devoirs, expliquer des sujets complexes ou vous assister dans les tâches administratives.",
+    aiWelcomeDesc: "Je peux vous aider avec les devoirs ou les tâches administratives.",
     askAnything: "Posez une question...",
     aiThinking: "Réflexion...",
     aiError: "J'ai rencontré une erreur. Veuillez réessayer.",
     clearChat: "Effacer la discussion",
 
-    // --- CHAT & COMMUNICATIONS ---
+    // --- CHAT ---
     chats: "Discussions",
     newChat: "Nouvelle discussion",
     typeMessage: "Écrivez un message...",
@@ -369,23 +450,23 @@ export const translations = {
     noChats: "Aucune discussion récente.",
     noContacts: "Aucun contact trouvé.",
     selectContact: "Sélectionnez un contact",
-    chooseFilter: "Choisissez un filtre en haut pour trouver des personnes.",
+    chooseFilter: "Choisissez un filtre pour trouver des personnes.",
     sending: "Envoi...",
     viewConversation: "Voir la conversation",
     deleteMessageTitle: "Supprimer le message",
-    deleteMessageConfirm: "Êtes-vous sûr de vouloir supprimer ce message ? Cette action est irréversible.",
+    deleteMessageConfirm: "Êtes-vous sûr de vouloir supprimer ce message ?",
     deleteChatTitle: "Supprimer la conversation",
-    deleteChatConfirm: "Êtes-vous sûr de vouloir supprimer toute la conversation ? Tout l'historique sera perdu.",
+    deleteChatConfirm: "Êtes-vous sûr de vouloir supprimer cette conversation ?",
     conversationDeleted: "Conversation supprimée",
     messageDeleted: "Message supprimé",
-    deleteError: "Impossible de supprimer l'élément",
+    deleteError: "Impossible de supprimer",
     createChatError: "Impossible de démarrer la conversation",
-    sendError: "Échec de l'envoi du message",
+    sendError: "Échec de l'envoi",
     startNewChat: "Nouvelle discussion",
     welcomeChat: "Bienvenue sur Messages",
-    chatWelcomeDesc: "Sélectionnez une conversation ou démarrez un nouveau chat pour vous connecter avec les enseignants, les parents et le personnel.",
+    chatWelcomeDesc: "Sélectionnez une conversation ou démarrez un nouveau chat.",
 
-    // --- ROLES & IDENTITIES ---
+    // --- ROLES ---
     role_parent: "Parent",
     role_teacher: "Enseignant",
     role_student: "Élève",
@@ -403,6 +484,7 @@ export const translations = {
     staff: "Personnel",
     parentOf: "Parent de",
     vpOf: "Censeur de",
+    subjectTeacher: "Enseignant",
 
     // --- ACADEMIC TERMS ---
     term: "Trimestre",
@@ -437,7 +519,7 @@ export const translations = {
     notificationsShort: "Alertes",
     viewAllNotifications: "Voir toutes les notifications",
     noNotifications: "Aucune notification",
-    noNotificationsDesc: "Vous êtes à jour ! Les mises à jour de l'école apparaîtront ici.",
+    noNotificationsDesc: "Vous êtes à jour ! Les mises à jour apparaîtront ici.",
     unreadNotifications: "non lues",
     newNotification: "Nouvelle notification",
     allRead: "Tout lu",
@@ -450,15 +532,11 @@ export const translations = {
     notifJustNow: "À l'instant",
     notifToday: "Aujourd'hui",
     notifYesterday: "Hier",
-
-    // Salutations
     goodMorning: "Bonjour",
     goodAfternoon: "Bon après-midi",
     goodEvening: "Bonsoir",
     hereIsWhat: "Voici ce qui se passe avec",
     today: "aujourd'hui",
-
-    // Statistiques
     activeAssignments: "Devoirs actifs",
     dueTerm: "Ce trimestre",
     libraryBooks: "Livres disponibles",
@@ -466,24 +544,18 @@ export const translations = {
     unjustifiedAbsences: "Absences injustifiées",
     perfectAttendance: "Assiduité parfaite ! 🎉",
     submitJustificationHint: "Soumettre une justification",
-
-    // Graphiques
     absenceTrend: "Tendance des absences",
     hoursPerMonth: "Heures par mois",
     studyMaterials: "Supports de cours",
     docsPerSubject: "Documents par matière",
     noDocumentsYet: "Aucun document encore",
-
-    // Actions rapides
     quickActions: "Accès rapide",
     jumpToSection: "Accédez à n'importe quelle section",
     seeAllUpdates: "Voir toutes les mises à jour",
-    accessDocuments: "Accéder aux documents de classe",
+    accessDocuments: "Accéder aux documents",
     submitJustification: "Soumettre une justification",
     downloadTextbooks: "Télécharger des manuels",
     talkToTeachers: "Parler aux enseignants",
-
-    // Page Documents
     allFiles: "Tous les fichiers",
     notesSlides: "Notes & Diaporamas",
     assignments: "Devoirs",
@@ -492,33 +564,29 @@ export const translations = {
     teacherNoUpload: "Votre enseignant n'a rien téléversé encore.",
     searchNoResults: "Aucun résultat pour",
     previewDoc: "Aperçu",
-
-    // Page Bibliothèque
     schoolLibrary: "Bibliothèque scolaire",
     searchBooksAuthors: "Rechercher livres ou auteurs…",
     libraryEmpty: "Bibliothèque vide",
-    libraryEmptyDesc: "Aucun livre publié pour l'instant — revenez bientôt !",
+    libraryEmptyDesc: "Aucun livre publié pour l'instant !",
     noBooksMatch: "Aucun livre ne correspond à",
     addedOn: "Ajouté",
     author: "Auteur",
     openNewTab: "Ouvrir dans un nouvel onglet",
     bookDetails: "Détails du livre",
-
-    // Page Discipline
     disciplineCentre: "Centre Discipline",
     disciplineDesc: "Absences, justifications et dossiers de conduite.",
     unjustifiedAbsenceHours: "Heures d'absences injustifiées",
     noPunishments: "Aucun dossier — continuez comme ça ! 🎉",
     justifyAbsences: "Justifier les absences",
-    sentToDM: "Envoyé directement au Surveillant Général",
+    sentToDM: "Envoyé au Surveillant Général",
     justificationMessage: "Message",
     attachDocument: "Joindre un document (optionnel)",
     attachFilePlaceholder: "Joindre un fichier (PDF, image…)",
     submitting: "Envoi en cours…",
     submitSuccess: "Justification soumise avec succès.",
-    submitError: "Échec de l'envoi. Veuillez réessayer.",
+    submitError: "Échec de l'envoi.",
     conductRecords: "Dossiers de conduite",
-    tapForDetails: "Appuyez pour voir les détails",
+    tapForDetails: "Appuyez pour les détails",
     justificationHistory: "Historique des justifications",
     conductRecord: "Dossier de conduite",
     reason: "Motif",
@@ -527,5 +595,95 @@ export const translations = {
     statusPending: "En attente",
     statusApproved: "Approuvé",
     statusRejected: "Rejeté",
+
+    // ─── PORTAIL ENSEIGNANT ───────────────────────────────────
+    teacherDashboard: "Tableau de bord Enseignant",
+    todaysClasses: "Cours du jour",
+    pendingELogs: "Cahiers en attente",
+    todaysTimetable: "Emploi du temps du jour",
+    noClassesScheduled: "Aucun cours prévu aujourd'hui.",
+    noActiveClass: "Aucun cours actif",
+    noActiveClassDesc: "Vous n'avez aucun cours programmé en ce moment. La page d'activité s'active pendant vos périodes.",
+    activeClass: "Cours actif",
+
+    adminNotifications: "Notifications Admin",
+    adminNotificationsDesc: "Messages de l'administration scolaire",
+    noAdminNotifs: "Aucune notification de l'administration.",
+
+    liveActivityTitle: "Activité en direct",
+    eLogBook: "Cahier de texte",
+    attendanceRegister: "Registre de présence",
+    topicTaught: "Leçon traitée",
+    subTopics: "Sous-thèmes abordés",
+    signSendVP: "Signer & Envoyer au Censeur",
+    attendanceNote: "Appuyez sur un élève pour le marquer absent (rouge).",
+    submitAttendance: "Soumettre le registre",
+    absent_count: "Absent(s)",
+    logSuccess: "Cahier signé et envoyé au Censeur.",
+    logError: "Échec de l'envoi du cahier.",
+    attendanceSuccess: "Registre de présence soumis.",
+
+    enterMarks: "Saisie des notes",
+    classLabel: "Classe",
+    subjectSection: "Matière / Section",
+    sequence: "Séquence",
+    seq1: "1ère Séquence",
+    seq2: "2ème Séquence",
+    seq3: "3ème Séquence",
+    seq4: "4ème Séquence",
+    seq5: "5ème Séquence",
+    seq6: "6ème Séquence",
+    totalMarks: "Total",
+    studentMarks: "Notes des élèves",
+    studentsEnrolled: "élèves inscrits",
+    noStudentsEnrolled: "Aucun élève inscrit pour cette matière.",
+    marksExistWarning: "Notes déjà existantes",
+    marksExistDesc: "Des notes existent déjà pour cette matière et séquence. Enregistrer remplacera toutes les données.",
+    yesReplace: "Oui, remplacer",
+    fillWithZero: "Remplir avec 0",
+    fillZeroTitle: "Remplir les notes manquantes avec 0",
+    fillZeroDesc: "élèves n'ont pas encore de note. Mettre leur note à 0 ?",
+    savingMarks: "Enregistrement…",
+    saveMarks: "Enregistrer les notes",
+    marksExistBanner: "Des notes existent déjà — enregistrer remplacera toutes les données existantes.",
+    missingMarksBanner: "élèves n'ont pas encore de note saisie.",
+    selectClassFirst: "— choisir la classe d'abord —",
+    selectSubjectFirst: "— choisir la matière d'abord —",
+    selectClass: "Choisir une classe",
+    selectSubject: "Choisir une matière",
+    selectSequence: "Choisir une séquence",
+    marksSaved: "Notes enregistrées avec succès.",
+    marksError: "Échec de l'enregistrement.",
+
+    publishCenter: "Centre de publication",
+    publishCenterDesc: "Partagez des ressources ou notifiez les parents instantanément",
+    publishWhat: "Que souhaitez-vous publier ?",
+    publishDocument: "Document",
+    publishDocumentDesc: "Téléversez des notes, devoirs ou examens pour votre classe",
+    publishNotification: "Notification",
+    publishNotificationDesc: "Envoyez une annonce directement aux parents",
+    documentType: "Type de document",
+    material: "Support de cours",
+    targetClass: "Classe cible",
+    subjectTitle: "Matière / Titre",
+    uploadFile: "Téléverser un fichier",
+    uploadFileDrop: "Déposez votre fichier ici",
+    uploadFileSupport: "PDF, DOCX, Images (Max 50Mo)",
+    publishNow: "Publier maintenant",
+    publishing: "Publication...",
+    publishSuccess: "Document publié et parents notifiés.",
+    publishError: "Échec de la publication.",
+    recipientType: "Type de destinataire",
+    individual: "Individuel",
+    wholeClass: "Toute la classe",
+    allMyClasses: "Toutes mes classes",
+    selectStudent: "Sélectionner un élève",
+    notifTitle: "Objet / Titre",
+    notifMessage: "Contenu du message",
+    notifMessagePlaceholder: "Rédigez votre message ici...",
+    sendNotification: "Envoyer la notification",
+    notifSent: "Notification envoyée avec succès.",
+    notifError: "Échec de l'envoi de la notification.",
+    fileTooLarge: "Fichier trop volumineux — limite 50Mo.",
   }
 };
