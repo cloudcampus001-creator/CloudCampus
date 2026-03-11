@@ -1053,7 +1053,6 @@ const CloudAIPage = () => {
       <Helmet>
         <title>Cloud AI — Axion Enterprise</title>
       </Helmet>
-      </Helmet>
 
       <div className="min-h-screen bg-background flex flex-col relative overflow-hidden">
 
