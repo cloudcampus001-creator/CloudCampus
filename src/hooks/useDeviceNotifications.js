@@ -2,37 +2,16 @@
  * useDeviceNotifications.js
  * src/hooks/useDeviceNotifications.js
  *
- * Fixes in this version:
- *  1. PERMISSION BUG: now calls gonative.onesignal.register() which is the
- *     call that triggers the native "Allow notifications?" dialog on new phones.
- *     The old code only called onesignalInfo() which reads state — it never
- *     asks for permission.
- *
- *  2. TIMING BUG: gonative.onesignal.registered fires when the app opens,
- *     before React mounts. The old code added the listener too late and missed
- *     it. Fix: capture the event early via a snippet in index.html (see below),
- *     then read window.__gonativePlayerId when the hook runs.
- *
- *  3. STALE TOKEN BUG: player IDs can rotate after app updates or OS upgrades.
- *     Now re-registers on every login so the DB always has a fresh token.
- *
- * ─────────────────────────────────────────────────────────────────────────────
- * REQUIRED: add this to your public/index.html <head> BEFORE any other scripts:
- *
- *   <script>
- *     window.__gonativePlayerId = null;
- *     window.addEventListener('gonative.onesignal.registered', function(e) {
- *       window.__gonativePlayerId =
- *         e.detail?.userId || e.detail?.oneSignalUserId || null;
- *     });
- *   </script>
- *
- * ─────────────────────────────────────────────────────────────────────────────
+ * Fully self-contained — no changes to index.html required.
+ * Polls for the OneSignal player ID with retries so it works even when
+ * OneSignal isn't ready yet (fresh install, reinstall, slow device).
  */
 
 import { useEffect, useRef } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
+
+const PLAYER_ID_KEY = 'cc_onesignal_player_id';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RELEVANCE CHECK
@@ -40,98 +19,119 @@ import { useToast } from '@/components/ui/use-toast';
 function isRelevant(notif, { role, userId, classId, studentMatricule }) {
   const type = notif.target_type;
   const tid  = notif.target_id;
-
   if (type === 'school') return true;
-
-  const matchesId =
-    (tid === null || tid === undefined || tid === 0) ||
-    String(tid) === String(userId);
-
+  const matchesId = (tid === null || tid === undefined || tid === 0) || String(tid) === String(userId);
   switch (role) {
-    case 'administrator':
-      return type === 'administrator' && matchesId;
-    case 'vice-principal':
-      return type === 'vice_principal' && matchesId;
-    case 'teacher':
-      return type === 'teacher' && matchesId;
-    case 'discipline':
-      return type === 'discipline_master' && matchesId;
+    case 'administrator':  return type === 'administrator'    && matchesId;
+    case 'vice-principal': return type === 'vice_principal'   && matchesId;
+    case 'teacher':        return type === 'teacher'          && matchesId;
+    case 'discipline':     return type === 'discipline_master'&& matchesId;
     case 'parent':
-      if (type === 'class' && String(tid) === String(classId)) return true;
+      if (type === 'class'  && String(tid) === String(classId))          return true;
       if (type === 'parent' && String(tid) === String(studentMatricule)) return true;
       return false;
-    default:
-      return false;
+    default: return false;
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DETECT MEDIAN.CO WRAPPER
+// DETECT MEDIAN.CO
 // ─────────────────────────────────────────────────────────────────────────────
 function isMedianApp() {
   return typeof window !== 'undefined' && !!window.gonative;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// REGISTER WITH ONESIGNAL AND GET PLAYER ID
-//
-// Three paths run in parallel — whichever resolves first wins:
-//  1. window.__gonativePlayerId — set by the early index.html listener
-//  2. gonative.onesignal.registered event — fires after register() completes
-//  3. onesignalInfo() direct read — for already-subscribed users
-//
-// register() is the key call that triggers the permission dialog on new phones.
+// READ PLAYER ID ONCE (single attempt, no side-effects)
+// Returns the player ID string if subscribed, or null.
 // ─────────────────────────────────────────────────────────────────────────────
-function registerAndGetPlayerId() {
+function readPlayerIdOnce() {
   return new Promise((resolve) => {
-    // Path 1: already captured before React loaded
-    if (window.__gonativePlayerId) {
-      console.log('[DeviceNotif] Using pre-captured player ID');
-      resolve(window.__gonativePlayerId);
+    if (!window.gonative?.onesignal?.onesignalInfo) {
+      resolve(null);
+      return;
+    }
+    const timer = setTimeout(() => resolve(null), 3000);
+    window.gonative.onesignal.onesignalInfo({
+      callback: (info) => {
+        clearTimeout(timer);
+        const id = info?.oneSignalUserId || info?.userId || null;
+        // Only return an ID if the user is actually subscribed
+        resolve(info?.isSubscribed && id ? id : null);
+      },
+    });
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET PLAYER ID WITH POLLING
+//
+// OneSignal registration takes a few seconds after install.
+// This polls every 2 seconds for up to 30 seconds before giving up.
+// Also listens for the registered event in case it fires during polling.
+// ─────────────────────────────────────────────────────────────────────────────
+function getPlayerIdWithRetry(maxWaitMs = 30000) {
+  return new Promise((resolve) => {
+    // Check localStorage first — if we already have it from a previous session
+    const cached = localStorage.getItem(PLAYER_ID_KEY);
+    if (cached) {
+      console.log('[DeviceNotif] Using cached player ID:', cached);
+      // Still re-verify in the background to catch rotated IDs
+      readPlayerIdOnce().then((fresh) => {
+        if (fresh && fresh !== cached) {
+          console.log('[DeviceNotif] Player ID rotated, updating cache:', fresh);
+          localStorage.setItem(PLAYER_ID_KEY, fresh);
+        }
+      });
+      resolve(cached);
       return;
     }
 
     let resolved = false;
+    let pollInterval = null;
+    let giveUpTimer = null;
+
     const done = (id) => {
       if (resolved) return;
       resolved = true;
-      if (id) window.__gonativePlayerId = id;
-      resolve(id ?? null);
+      clearInterval(pollInterval);
+      clearTimeout(giveUpTimer);
+      if (id) {
+        localStorage.setItem(PLAYER_ID_KEY, id);
+        console.log('[DeviceNotif] Player ID obtained:', id);
+      } else {
+        console.warn('[DeviceNotif] Could not obtain player ID after retries');
+      }
+      resolve(id);
     };
 
-    // Path 2: event fires after register() below
+    // Listen for the registration event (fires right after permission granted)
     const onRegistered = (e) => {
       const id = e.detail?.userId || e.detail?.oneSignalUserId || null;
-      console.log('[DeviceNotif] Player ID from registered event:', id);
-      done(id);
+      if (id) {
+        console.log('[DeviceNotif] Player ID from registered event:', id);
+        done(id);
+      }
     };
     window.addEventListener('gonative.onesignal.registered', onRegistered, { once: true });
 
-    // Path 3: direct read for already-subscribed users
-    if (window.gonative?.onesignal?.onesignalInfo) {
-      window.gonative.onesignal.onesignalInfo({
-        callback: (info) => {
-          if (info?.isSubscribed && info?.oneSignalUserId) {
-            console.log('[DeviceNotif] Player ID from onesignalInfo:', info.oneSignalUserId);
-            done(info.oneSignalUserId);
-          }
-        },
-      });
-    }
-
-    // THE MISSING CALL — this is what shows the "Allow notifications?" dialog
-    // on new phones. Without this, no prompt ever appears.
+    // Trigger the permission dialog (shows "Allow notifications?" on new phones)
     if (window.gonative?.onesignal?.register) {
       window.gonative.onesignal.register();
     }
 
-    // Safety timeout
-    setTimeout(() => {
-      if (!resolved) {
-        console.warn('[DeviceNotif] Timed out waiting for player ID');
-        done(null);
-      }
-    }, 12_000);
+    // Poll every 2 seconds — handles the case where register() was called
+    // before but the event already fired and was missed
+    pollInterval = setInterval(async () => {
+      const id = await readPlayerIdOnce();
+      if (id) done(id);
+    }, 2000);
+
+    // Give up after maxWaitMs
+    giveUpTimer = setTimeout(() => {
+      window.removeEventListener('gonative.onesignal.registered', onRegistered);
+      done(null);
+    }, maxWaitMs);
   });
 }
 
@@ -140,13 +140,12 @@ function registerAndGetPlayerId() {
 // ─────────────────────────────────────────────────────────────────────────────
 async function saveDeviceToken({ userId, role, schoolId, classId, studentMatricule, playerId }) {
   if (!playerId || !userId || !schoolId) return;
-
   const { error } = await supabase
     .from('device_tokens')
     .upsert(
       {
         user_id:           String(userId),
-        role:              role,
+        role,
         school_id:         parseInt(schoolId),
         class_id:          classId ? String(classId) : null,
         student_matricule: studentMatricule ?? null,
@@ -155,42 +154,26 @@ async function saveDeviceToken({ userId, role, schoolId, classId, studentMatricu
       },
       { onConflict: 'user_id,school_id' }
     );
-
-  if (error) {
-    console.warn('[DeviceNotif] Failed to save device token:', error.message);
-  } else {
-    console.log('[DeviceNotif] Token saved — user:', userId, '| player:', playerId);
-  }
+  if (error) console.warn('[DeviceNotif] Failed to save token:', error.message);
+  else       console.log('[DeviceNotif] Token saved — user:', userId, '| player:', playerId);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WEB PUSH FALLBACK (desktop browser users only)
+// WEB PUSH FALLBACK (desktop browser only)
 // ─────────────────────────────────────────────────────────────────────────────
 let _swReg = null;
-
-async function getSwRegistration() {
+async function getSwReg() {
   if (!('serviceWorker' in navigator)) return null;
   if (_swReg) return _swReg;
-  try {
-    _swReg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-    await navigator.serviceWorker.ready;
-    return _swReg;
-  } catch (err) {
-    console.warn('[DeviceNotif] SW registration failed:', err.message);
-    return null;
-  }
+  try { _swReg = await navigator.serviceWorker.register('/sw.js', { scope: '/' }); await navigator.serviceWorker.ready; return _swReg; }
+  catch (e) { return null; }
 }
-
-async function fireBrowserNotification(title, body) {
-  if (!('Notification' in window)) return;
-  if (Notification.permission !== 'granted') return;
-  const options = {
-    body: body || '', icon: '/favicon.ico', badge: '/favicon.ico',
-    tag: `cc_${Date.now()}`, renotify: true, vibrate: [200, 100, 200],
-  };
-  const reg = await getSwRegistration();
-  if (reg) { try { await reg.showNotification(title, options); return; } catch (_) {} }
-  try { const n = new Notification(title, options); setTimeout(() => n.close(), 8000); } catch (_) {}
+async function fireBrowserNotif(title, body) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const opts = { body: body || '', icon: '/favicon.ico', badge: '/favicon.ico', tag: `cc_${Date.now()}`, renotify: true, vibrate: [200, 100, 200] };
+  const reg = await getSwReg();
+  if (reg) { try { await reg.showNotification(title, opts); return; } catch (_) {} }
+  try { const n = new Notification(title, opts); setTimeout(() => n.close(), 8000); } catch (_) {}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -210,49 +193,39 @@ export function useDeviceNotifications() {
     identityRef.current = { role, userId, classId, studentMatricule };
   }, [role, userId, classId, studentMatricule]);
 
-  // ── Registration: runs on every login to keep token fresh ────────────────
+  // ── Token registration ────────────────────────────────────────────────────
   useEffect(() => {
     if (!userId || !schoolId) return;
 
     if (isMedianApp()) {
-      registerAndGetPlayerId().then((playerId) => {
-        if (playerId) {
-          saveDeviceToken({ userId, role, schoolId, classId, studentMatricule, playerId });
-        } else {
-          console.warn('[DeviceNotif] No player ID — user may have denied notifications');
-        }
+      // Clear cached ID on every fresh login so reinstalls always re-register
+      // (the upsert means re-saving the same ID is harmless)
+      getPlayerIdWithRetry().then((playerId) => {
+        if (playerId) saveDeviceToken({ userId, role, schoolId, classId, studentMatricule, playerId });
       });
     } else {
-      // Browser fallback
-      getSwRegistration();
+      getSwReg();
       if ('Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission();
       }
     }
   }, [userId, schoolId]);
 
-  // ── Realtime subscription → in-app toasts ────────────────────────────────
+  // ── Realtime → in-app toasts ──────────────────────────────────────────────
   useEffect(() => {
     if (!schoolId) return;
-
     const channel = supabase
       .channel(`device_notif_${schoolId}_${role}_${userId || 'guest'}`)
-      .on(
-        'postgres_changes',
+      .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'notifications', filter: `school_id=eq.${parseInt(schoolId)}` },
         (payload) => {
-          const notif    = payload.new;
-          const identity = identityRef.current;
-          if (!isRelevant(notif, identity)) return;
-          const body = notif.content
-            ? notif.content.slice(0, 120) + (notif.content.length > 120 ? '…' : '')
-            : '';
+          const notif = payload.new;
+          if (!isRelevant(notif, identityRef.current)) return;
+          const body = notif.content ? notif.content.slice(0, 120) + (notif.content.length > 120 ? '…' : '') : '';
           toast({ title: notif.title, description: body, duration: 6000 });
-          if (!isMedianApp()) fireBrowserNotification(notif.title, body);
+          if (!isMedianApp()) fireBrowserNotif(notif.title, body);
         }
-      )
-      .subscribe();
-
+      ).subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [schoolId, role, userId, classId, studentMatricule]);
 }
