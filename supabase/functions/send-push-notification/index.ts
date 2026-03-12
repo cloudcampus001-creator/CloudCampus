@@ -72,14 +72,29 @@ Deno.serve(async (req: Request) => {
       include_player_ids: playerIds,
       headings:           { en: notif.title },
       contents:           { en: body_text },
-      // Opens the app when tapped — median.co will handle the deep link
-      url:                'https://cloudcampus237.com',
-      // Android styling
-      android_accent_color: '6366F1',
-      small_icon:           'ic_stat_onesignal_default',
-      // Collapse key: latest notification per school replaces stale ones of the same type
-      collapse_id:          `cloudcampus_${notif.school_id}_${notif.target_type}`,
-      // Data payload the app can read when opened
+
+      // ── DO NOT set `url` here ──────────────────────────────────────────────
+      // If `url` is set to a https:// address and the device has no App Links
+      // configured, Android opens the system browser instead of the app.
+      // Leaving it unset tells OneSignal to simply open/focus the app — exactly
+      // like WhatsApp does. The in-app Realtime subscription will show the
+      // notification inside the app once it opens.
+
+      // ── Icon ──────────────────────────────────────────────────────────────
+      // `small_icon` must match the drawable resource name you uploaded to
+      // your median.co app (or the default OneSignal icon name).
+      // See PUSH_NOTIFICATIONS_SETUP.md → "Changing the icon" for instructions.
+      small_icon:           'ic_stat_cloudcampus',   // ← change this after uploading your icon
+      large_icon:           'ic_launcher',            // ← app launcher icon (auto-included by median.co)
+      android_accent_color: '6366F1',                // indigo — matches CloudCampus brand
+
+      // ── Android behaviour ─────────────────────────────────────────────────
+      // Collapse key: a new notification of the same type replaces the old one
+      // so the tray doesn't fill up with duplicates.
+      collapse_id: `cloudcampus_${notif.school_id}_${notif.target_type}`,
+
+      // ── Data payload ──────────────────────────────────────────────────────
+      // Readable by the app when the notification is tapped.
       data: {
         notif_id:    notif.id,
         school_id:   notif.school_id,
