@@ -1,18 +1,10 @@
 /**
- * VPMarksPage.jsx
- * src/pages/vice_principal/VPMarksPage.jsx
+ * VPMarksPage.jsx — Vice Principal
+ * Marksheet tab: Organized (accordion) or Flat table
+ * Report Cards tab: select sequences → generate → ranked table → CSV + Print
  *
- * Marksheet tab has TWO view modes (toggle button):
- *  • Organized  (default) — accordion: Sequence → Subject (+ teacher name) → student rows
- *  • Flat table           — simple chronological table
- *
- * Report Cards tab:
- *  Select sequences → Generate → ranked table → CSV + Print/PDF
- *
- * FIX: Replaced FK-join queries (students!inner, students(name)) with
- *      separate queries + in-JS merging. PostgREST cannot always resolve
- *      non-standard text-to-text FKs (student_matricule → matricule)
- *      so the join silently returned null, making marks appear empty.
+ * Design: purple/pink glass, PageTransition, all strings via t()
+ * Logic: unchanged from original (separate-fetch pattern for FK-join fix)
  */
 import React, { useState, useEffect } from 'react';
 import {
@@ -20,15 +12,15 @@ import {
   RefreshCw, ClipboardList, BookOpen, ChevronDown, ChevronRight,
   LayoutList, Table2,
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/customSupabaseClient';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useToast } from '@/components/ui/use-toast';
 import { Helmet } from 'react-helmet';
+import { useToast } from '@/components/ui/use-toast';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { cn } from '@/lib/utils';
+import PageTransition from '@/components/PageTransition';
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+/* ── constants ─────────────────────────────────────────── */
 const SEQUENCES = [
   { value: 'Sequence 1', label: '1st Sequence' },
   { value: 'Sequence 2', label: '2nd Sequence' },
@@ -38,11 +30,10 @@ const SEQUENCES = [
   { value: 'Sequence 6', label: '6th Sequence' },
 ];
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+/* ── helpers ───────────────────────────────────────────── */
 function ordinal(n) {
   if (n == null) return '—';
-  const s = ['th', 'st', 'nd', 'rd'];
-  const v = n % 100;
+  const s = ['th', 'st', 'nd', 'rd'], v = n % 100;
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
@@ -63,93 +54,59 @@ function assignRanks(cards) {
   return sorted;
 }
 
-// ── Fetch marks with student + teacher names (NO FK joins) ───────────────────
-// Instead of relying on PostgREST FK resolution (which breaks for text-to-text
-// FKs like student_matricule → matricule), we fetch three tables separately
-// and merge them in JavaScript.
+/* Separate-fetch helper — avoids FK-join issues on text-to-text FKs */
 async function fetchMarksForClass(classId) {
   const cid = parseInt(classId);
-
-  // 1. Raw marks — no joins
   const { data: rawMarks, error } = await supabase
     .from('student_marks')
     .select('id, student_matricule, teacher_id, subject, assessment_name, mark, total_marks, created_at')
-    .eq('class_id', cid)
-    .order('assessment_name')
-    .order('subject')
-    .limit(1000);
-
+    .eq('class_id', cid).order('assessment_name').order('subject').limit(1000);
   if (error) throw error;
-  if (!rawMarks || rawMarks.length === 0) return [];
+  if (!rawMarks?.length) return [];
 
-  // 2. Student names for this class
-  const { data: students } = await supabase
-    .from('students')
-    .select('matricule, name')
-    .eq('class_id', cid);
-
+  const { data: students } = await supabase.from('students').select('matricule, name').eq('class_id', cid);
   const studentMap = {};
   (students || []).forEach(s => { studentMap[s.matricule] = s.name; });
 
-  // 3. Teacher names (only the IDs that actually appear in the marks)
   const teacherIds = [...new Set(rawMarks.map(m => m.teacher_id).filter(Boolean))];
   const teacherMap = {};
-  if (teacherIds.length > 0) {
-    const { data: teachers } = await supabase
-      .from('teachers')
-      .select('id, name')
-      .in('id', teacherIds);
+  if (teacherIds.length) {
+    const { data: teachers } = await supabase.from('teachers').select('id, name').in('id', teacherIds);
     (teachers || []).forEach(t => { teacherMap[t.id] = t.name; });
   }
-
-  // 4. Merge — shape each row exactly like the old join result
   return rawMarks.map(m => ({
     ...m,
     students: { name: studentMap[m.student_matricule] || m.student_matricule || '—' },
-    teachers: { name: teacherMap[m.teacher_id]        || '—' },
+    teachers: { name: teacherMap[m.teacher_id] || '—' },
   }));
 }
 
-// ── Report card generation ────────────────────────────────────────────────────
 async function buildReportCards(classId, schoolId, selectedSeqs) {
   const cid = parseInt(classId);
-
   const [
-    { data: students },
-    { data: classSubjRows },
-    { data: enrollRows },
-    { data: coefRows },
-    { data: markRows },
-    { data: classRow },
+    { data: students }, { data: classSubjRows }, { data: enrollRows },
+    { data: coefRows }, { data: markRows }, { data: classRow },
   ] = await Promise.all([
     supabase.from('students').select('matricule, name').eq('class_id', cid).order('name'),
     supabase.from('class_subjects').select('subject, is_obligatory').eq('class_id', cid),
     supabase.from('student_subject_enrollments').select('student_matricule, subject').eq('class_id', cid),
     supabase.from('subject_coefficients').select('subject_name, coefficient').eq('class_id', cid),
-    supabase.from('student_marks')
-      .select('student_matricule, subject, mark, total_marks, assessment_name')
-      .eq('class_id', cid)
-      .in('assessment_name', selectedSeqs),
+    supabase.from('student_marks').select('student_matricule, subject, mark, total_marks, assessment_name')
+      .eq('class_id', cid).in('assessment_name', selectedSeqs),
     supabase.from('classes').select('name').eq('id', cid).single(),
   ]);
-
   const className = classRow?.name || '';
   const coefMap = {};
   (coefRows || []).forEach(r => { coefMap[r.subject_name] = parseFloat(r.coefficient); });
-
-  const obligatorySet = new Set(
-    (classSubjRows || []).filter(r => r.is_obligatory !== false).map(r => r.subject)
-  );
+  const obligatorySet = new Set((classSubjRows || []).filter(r => r.is_obligatory !== false).map(r => r.subject));
   const additionalMap = {};
   (enrollRows || []).forEach(r => {
     if (!additionalMap[r.student_matricule]) additionalMap[r.student_matricule] = new Set();
     additionalMap[r.student_matricule].add(r.subject);
   });
-
   const allSubjectsSet = new Set([...obligatorySet]);
   (enrollRows || []).forEach(r => allSubjectsSet.add(r.subject));
   const allSubjects = [...allSubjectsSet].sort();
-
   const marksLookup = {};
   (markRows || []).forEach(m => {
     const on20 = (m.mark * 20) / m.total_marks;
@@ -157,7 +114,6 @@ async function buildReportCards(classId, schoolId, selectedSeqs) {
     if (!marksLookup[key]) marksLookup[key] = [];
     marksLookup[key].push(on20);
   });
-
   const cards = (students || []).map(student => {
     const subjectRows = allSubjects.map(subject => {
       const isObligatory = obligatorySet.has(subject);
@@ -172,7 +128,6 @@ async function buildReportCards(classId, schoolId, selectedSeqs) {
       const markOn20 = seqMarks.reduce((a, b) => a + b, 0) / seqMarks.length;
       return { subject, coef, markOn20, weighted: markOn20 * coef, offered: true };
     });
-
     const graded = subjectRows.filter(r => r.offered && r.markOn20 !== null);
     let average = null;
     if (graded.length > 0) {
@@ -182,11 +137,9 @@ async function buildReportCards(classId, schoolId, selectedSeqs) {
     }
     return { matricule: student.matricule, name: student.name, subjectRows, average, rank: null };
   });
-
   return { cards: assignRanks(cards), allSubjects, className };
 }
 
-// ── CSV Export ────────────────────────────────────────────────────────────────
 function exportCSV(cards, allSubjects, className, selectedSeqs) {
   const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const period = selectedSeqs.join(' + ');
@@ -213,17 +166,15 @@ function exportCSV(cards, allSubjects, className, selectedSeqs) {
   a.click();
 }
 
-// ── Print / PDF ───────────────────────────────────────────────────────────────
 function printCards(cards, allSubjects, className, selectedSeqs, schoolName) {
-  const period  = selectedSeqs.join(' + ');
-  const total   = cards.length;
+  const period = selectedSeqs.join(' + '), total = cards.length;
   const cardsHtml = cards.map(student => {
     const rows = allSubjects.map(sub => {
       const r = student.subjectRows.find(x => x.subject === sub);
       if (!r || !r.offered) return '';
-      const mark     = r.markOn20 !== null ? r.markOn20.toFixed(2) : '—';
-      const weighted = r.weighted  !== null ? r.weighted.toFixed(2) : '—';
-      const color    = r.markOn20 === null ? '#6b7280' : r.markOn20 >= 10 ? '#15803d' : '#dc2626';
+      const mark = r.markOn20 !== null ? r.markOn20.toFixed(2) : '—';
+      const weighted = r.weighted !== null ? r.weighted.toFixed(2) : '—';
+      const color = r.markOn20 === null ? '#6b7280' : r.markOn20 >= 10 ? '#15803d' : '#dc2626';
       return `<tr><td>${sub}</td><td class="c">${r.coef}</td><td class="c" style="color:${color};font-weight:700">${mark}</td><td class="c">${weighted}</td></tr>`;
     }).join('');
     const avgColor = student.average == null ? '#6b7280' : student.average >= 10 ? '#15803d' : '#dc2626';
@@ -245,127 +196,92 @@ function printCards(cards, allSubjects, className, selectedSeqs, schoolName) {
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Report Cards</title>
   <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',Arial,sans-serif;font-size:12px;color:#1f2937}
   .card{max-width:700px;margin:0 auto;padding:28px;page-break-after:always}.card:last-child{page-break-after:avoid}
-  .hdr{text-align:center;border-bottom:3px solid #1e3a8a;padding-bottom:14px;margin-bottom:16px}
-  .school{font-size:17px;font-weight:800;color:#1e3a8a;letter-spacing:1px;text-transform:uppercase}
+  .hdr{text-align:center;border-bottom:3px solid #7c3aed;padding-bottom:14px;margin-bottom:16px}
+  .school{font-size:17px;font-weight:800;color:#7c3aed;letter-spacing:1px;text-transform:uppercase}
   .sub{font-size:11px;font-weight:700;color:#374151;margin-top:3px;letter-spacing:3px;text-transform:uppercase}
   .meta{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px;margin-top:10px;font-size:11px}
   table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #d1d5db;padding:6px 9px}
-  thead tr{background:#1e3a8a;color:#fff}tbody tr:nth-child(even){background:#f8fafc}tfoot .tot{background:#f1f5f9}
+  thead tr{background:#7c3aed;color:#fff}tbody tr:nth-child(even){background:#f8fafc}tfoot .tot{background:#faf5ff}
   .c{text-align:center}.sigs{display:flex;justify-content:space-between;margin-top:22px;font-size:10px;color:#6b7280;flex-wrap:wrap;gap:8px}
   @media print{@page{size:A4;margin:1.4cm}}</style></head><body>${cardsHtml}</body></html>`;
   const w = window.open('', '_blank');
-  w.document.write(html);
-  w.document.close();
+  w.document.write(html); w.document.close();
   setTimeout(() => { w.focus(); w.print(); }, 500);
 }
 
-// ── Organized Marksheet View ──────────────────────────────────────────────────
-function OrganizedView({ marks }) {
-  const [openSeqs, setOpenSeqs]   = useState({});
+/* ── Organized View ────────────────────────────────────── */
+function OrganizedView({ marks, t }) {
+  const [openSeqs,  setOpenSeqs]  = useState({});
   const [openSubjs, setOpenSubjs] = useState({});
 
   const grouped = {};
   marks.forEach(m => {
-    const seq     = m.assessment_name;
-    const sub     = m.subject;
-    const teacher = m.teachers?.name || '—';
+    const seq = m.assessment_name, sub = m.subject, teacher = m.teachers?.name || '—';
     if (!grouped[seq]) grouped[seq] = {};
     if (!grouped[seq][sub]) grouped[seq][sub] = { teacher, rows: [] };
-    grouped[seq][sub].rows.push({
-      name:  m.students?.name || m.student_matricule || '—',
-      mark:  m.mark,
-      total: m.total_marks,
-    });
+    grouped[seq][sub].rows.push({ name: m.students?.name || m.student_matricule || '—', mark: m.mark, total: m.total_marks });
   });
-
-  Object.values(grouped).forEach(subjects =>
-    Object.values(subjects).forEach(s =>
-      s.rows.sort((a, b) => a.name.localeCompare(b.name))
-    )
-  );
-
+  Object.values(grouped).forEach(subjects => Object.values(subjects).forEach(s => s.rows.sort((a, b) => a.name.localeCompare(b.name))));
   const seqOrder = SEQUENCES.map(s => s.value).filter(v => grouped[v]);
-
-  if (seqOrder.length === 0) {
-    return <div className="text-center py-8 text-muted-foreground">No marks found for this class yet.</div>;
-  }
-
-  const toggleSeq  = seq => setOpenSeqs(p  => ({ ...p, [seq]:  !p[seq]  }));
-  const toggleSubj = key => setOpenSubjs(p => ({ ...p, [key]: !p[key] }));
+  if (!seqOrder.length) return <p className="text-center py-8 text-muted-foreground text-sm">{t('noMarksYet')}</p>;
 
   return (
     <div className="space-y-3">
       {seqOrder.map(seq => {
-        const seqOpen    = openSeqs[seq] !== false;
-        const subjects   = Object.keys(grouped[seq]).sort();
-        const totalMarks = Object.values(grouped[seq]).reduce((n, s) => n + s.rows.length, 0);
+        const seqOpen  = openSeqs[seq] !== false;
+        const subjects = Object.keys(grouped[seq]).sort();
+        const totalM   = Object.values(grouped[seq]).reduce((n, s) => n + s.rows.length, 0);
         return (
-          <div key={seq} className="rounded-xl border border-white/10 overflow-hidden">
-            <button
-              onClick={() => toggleSeq(seq)}
-              className="w-full flex items-center justify-between px-4 py-3
-                         bg-pink-500/10 hover:bg-pink-500/15 transition-colors text-left"
-            >
+          <div key={seq} className="rounded-2xl border border-white/8 overflow-hidden">
+            <button onClick={() => setOpenSeqs(p => ({ ...p, [seq]: !p[seq] }))}
+              className="w-full flex items-center justify-between px-4 py-3 bg-purple-500/8 hover:bg-purple-500/12 transition-colors text-left">
               <div className="flex items-center gap-3">
-                {seqOpen
-                  ? <ChevronDown  className="w-4 h-4 text-pink-400 shrink-0" />
-                  : <ChevronRight className="w-4 h-4 text-pink-400 shrink-0" />}
-                <span className="font-bold text-pink-300">{seq}</span>
-                <Badge variant="outline" className="text-[10px] bg-pink-500/10 text-pink-400 border-pink-500/30">
-                  {subjects.length} subject{subjects.length !== 1 ? 's' : ''} · {totalMarks} entries
-                </Badge>
+                {seqOpen ? <ChevronDown className="w-4 h-4 text-purple-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-purple-400 shrink-0" />}
+                <span className="font-bold text-purple-300">{seq}</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                  {subjects.length} subj · {totalM} entries
+                </span>
               </div>
             </button>
-
             {seqOpen && (
               <div className="divide-y divide-white/5">
                 {subjects.map(sub => {
                   const { teacher, rows } = grouped[seq][sub];
-                  const subjKey  = `${seq}||${sub}`;
-                  const subjOpen = openSubjs[subjKey] !== false;
+                  const key      = `${seq}||${sub}`;
+                  const subjOpen = openSubjs[key] !== false;
                   const passed   = rows.filter(r => r.mark / r.total >= 0.5).length;
                   return (
                     <div key={sub} className="bg-white/[0.01]">
-                      <button
-                        onClick={() => toggleSubj(subjKey)}
-                        className="w-full flex items-center justify-between px-5 py-2.5
-                                   hover:bg-white/5 transition-colors text-left"
-                      >
+                      <button onClick={() => setOpenSubjs(p => ({ ...p, [key]: !p[key] }))}
+                        className="w-full flex items-center justify-between px-5 py-2.5 hover:bg-white/4 transition-colors text-left">
                         <div className="flex items-center gap-2.5">
-                          {subjOpen
-                            ? <ChevronDown  className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                            : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
+                          {subjOpen ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
                           <span className="font-semibold text-sm">{sub}</span>
                           <span className="text-xs text-muted-foreground">· {teacher}</span>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-xs text-green-400">{passed} passed</span>
+                          <span className="text-xs text-green-400">{passed} {t('passed')}</span>
                           <span className="text-xs text-muted-foreground">/ {rows.length}</span>
                         </div>
                       </button>
-
                       {subjOpen && (
-                        <div className="mx-4 mb-3 rounded-lg border border-white/10 overflow-hidden">
+                        <div className="mx-4 mb-3 rounded-xl border border-white/8 overflow-hidden">
                           <table className="w-full text-sm">
                             <thead>
-                              <tr className="bg-white/5 border-b border-white/10">
-                                <th className="text-left px-3 py-2 font-medium text-muted-foreground text-xs">Student</th>
-                                <th className="text-center px-3 py-2 font-medium text-muted-foreground text-xs">Mark</th>
-                                <th className="text-center px-3 py-2 font-medium text-muted-foreground text-xs">On 20</th>
+                              <tr className="bg-white/5 border-b border-white/8">
+                                {[t('studentLabel'), 'Mark', 'On 20'].map(h => (
+                                  <th key={h} className="text-left px-3 py-2 font-medium text-muted-foreground text-xs first:text-left text-center first-of-type:text-left">{h}</th>
+                                ))}
                               </tr>
                             </thead>
                             <tbody>
                               {rows.map((row, i) => {
                                 const on20 = (row.mark * 20) / row.total;
-                                const pass = on20 >= 10;
                                 return (
-                                  <tr key={i} className="border-b border-white/5 last:border-0 hover:bg-white/5">
+                                  <tr key={i} className="border-b border-white/5 last:border-0 hover:bg-white/4">
                                     <td className="px-3 py-2 font-medium">{row.name}</td>
-                                    <td className="px-3 py-2 text-center text-muted-foreground">
-                                      {row.mark} / {row.total}
-                                    </td>
-                                    <td className={`px-3 py-2 text-center font-bold font-mono
-                                        ${pass ? 'text-green-400' : 'text-red-400'}`}>
+                                    <td className="px-3 py-2 text-center text-muted-foreground">{row.mark} / {row.total}</td>
+                                    <td className={cn('px-3 py-2 text-center font-bold font-mono', on20 >= 10 ? 'text-green-400' : 'text-red-400')}>
                                       {on20.toFixed(2)}
                                     </td>
                                   </tr>
@@ -387,57 +303,56 @@ function OrganizedView({ marks }) {
   );
 }
 
-// ── Flat Marksheet View ───────────────────────────────────────────────────────
-function FlatView({ marks }) {
-  if (marks.length === 0) {
-    return <div className="text-center py-8 text-muted-foreground">No marks found for this class yet.</div>;
-  }
+/* ── Flat View ─────────────────────────────────────────── */
+function FlatView({ marks, t }) {
+  if (!marks.length) return <p className="text-center py-8 text-muted-foreground text-sm">{t('noMarksYet')}</p>;
   return (
     <div className="overflow-auto">
       <table className="w-full text-sm text-left">
         <thead>
-          <tr className="border-b border-white/10">
-            {['Student', 'Subject', 'Sequence', 'Mark', 'Date'].map(h => (
-              <th key={h} className="h-11 px-4 font-medium text-muted-foreground">{h}</th>
+          <tr className="border-b border-white/8">
+            {[t('studentLabel'), 'Subject', 'Sequence', 'Mark', 'Date'].map(h => (
+              <th key={h} className="h-10 px-4 font-medium text-muted-foreground text-xs">{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {marks.map((m, i) => (
-            <tr key={m.id ?? i} className="border-b border-white/10 hover:bg-white/5">
-              <td className="p-4 font-medium">{m.students?.name || m.student_matricule}</td>
-              <td className="p-4">{m.subject}</td>
-              <td className="p-4 text-muted-foreground">{m.assessment_name}</td>
-              <td className="p-4">
-                <Badge variant={m.mark / m.total_marks >= 0.5 ? 'default' : 'destructive'}>
-                  {m.mark} / {m.total_marks}
-                </Badge>
-              </td>
-              <td className="p-4 text-muted-foreground text-xs">
-                {m.created_at ? new Date(m.created_at).toLocaleDateString() : '—'}
-              </td>
-            </tr>
-          ))}
+          {marks.map((m, i) => {
+            const pass = m.mark / m.total_marks >= 0.5;
+            return (
+              <tr key={m.id ?? i} className="border-b border-white/6 hover:bg-white/4">
+                <td className="p-3 font-medium">{m.students?.name || m.student_matricule}</td>
+                <td className="p-3">{m.subject}</td>
+                <td className="p-3 text-muted-foreground">{m.assessment_name}</td>
+                <td className="p-3">
+                  <span className={cn('text-xs font-bold px-2.5 py-1 rounded-full border',
+                    pass ? 'bg-green-500/15 text-green-400 border-green-500/25' : 'bg-red-500/15 text-red-400 border-red-500/25'
+                  )}>{m.mark} / {m.total_marks}</span>
+                </td>
+                <td className="p-3 text-muted-foreground text-xs">{m.created_at ? new Date(m.created_at).toLocaleDateString() : '—'}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
   );
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// MAIN COMPONENT
-// ════════════════════════════════════════════════════════════════════════════
+/* ══════════════════════════════════════════════════════════
+   MAIN COMPONENT
+══════════════════════════════════════════════════════════ */
 const VPMarksPage = ({ selectedClass }) => {
   const { toast }  = useToast();
+  const { t }      = useLanguage();
   const schoolId   = localStorage.getItem('schoolId');
   const schoolName = localStorage.getItem('schoolName') || '';
 
-  // Marksheet
+  const [activeTab,    setActiveTab]    = useState('marksheet');
   const [marks,        setMarks]        = useState([]);
   const [marksLoading, setMarksLoading] = useState(false);
   const [viewMode,     setViewMode]     = useState('organized');
 
-  // Report cards
   const [selectedSeqs, setSelectedSeqs] = useState([]);
   const [generating,   setGenerating]   = useState(false);
   const [reportCards,  setReportCards]  = useState([]);
@@ -447,290 +362,250 @@ const VPMarksPage = ({ selectedClass }) => {
 
   useEffect(() => {
     if (!selectedClass) return;
-    setGenerated(false);
-    setReportCards([]);
-
+    setGenerated(false); setReportCards([]);
     (async () => {
       setMarksLoading(true);
       try {
-        // ── THE FIX ───────────────────────────────────────────────────────────
-        // Use the separate-fetch helper that avoids all FK-join issues.
-        // fetchMarksForClass() does 3 clean queries and merges in JS.
-        const enriched = await fetchMarksForClass(selectedClass);
-        setMarks(enriched);
+        setMarks(await fetchMarksForClass(selectedClass));
       } catch (err) {
-        console.error('VPMarksPage — failed to load marks:', err);
-        toast({
-          variant: 'destructive',
-          title: 'Error loading marks',
-          description: err.message || 'Could not fetch marks for this class.',
-        });
+        toast({ variant: 'destructive', title: t('error'), description: err.message });
         setMarks([]);
-      } finally {
-        setMarksLoading(false);
-      }
-
-      // Fetch class name separately
-      const { data: cls } = await supabase
-        .from('classes')
-        .select('name')
-        .eq('id', parseInt(selectedClass))
-        .single();
+      } finally { setMarksLoading(false); }
+      const { data: cls } = await supabase.from('classes').select('name').eq('id', parseInt(selectedClass)).single();
       if (cls) setClassName(cls.name);
     })();
   }, [selectedClass]);
 
-  const toggleSeq = seq =>
-    setSelectedSeqs(prev =>
-      prev.includes(seq) ? prev.filter(s => s !== seq) : [...prev, seq]
-    );
+  const toggleSeq = seq => setSelectedSeqs(p => p.includes(seq) ? p.filter(s => s !== seq) : [...p, seq]);
 
   const handleGenerate = async () => {
     if (!selectedSeqs.length) {
-      toast({ variant: 'destructive', title: 'No sequence selected', description: 'Tick at least one sequence.' });
+      toast({ variant: 'destructive', title: t('error'), description: 'Select at least one sequence.' });
       return;
     }
     setGenerating(true);
     try {
-      const { cards, allSubjects: subs, className: cn } =
-        await buildReportCards(selectedClass, schoolId, selectedSeqs);
-      setReportCards(cards);
-      setAllSubjects(subs);
+      const { cards, allSubjects: subs, className: cn } = await buildReportCards(selectedClass, schoolId, selectedSeqs);
+      setReportCards(cards); setAllSubjects(subs);
       if (cn) setClassName(cn);
       setGenerated(true);
-      toast({ title: 'Done!', description: `${cards.length} report cards generated.` });
+      toast({ title: `✓ ${t('success')}`, description: `${cards.length} ${t('reportCardsGenerated')}` });
     } catch (err) {
-      console.error(err);
-      toast({ variant: 'destructive', title: 'Error', description: err.message });
-    } finally {
-      setGenerating(false);
-    }
+      toast({ variant: 'destructive', title: t('error'), description: err.message });
+    } finally { setGenerating(false); }
   };
 
+  /* Empty state */
   if (!selectedClass) {
     return (
-      <div className="flex flex-col items-center justify-center h-[50vh] text-muted-foreground">
-        <FileCheck className="w-16 h-16 mb-4 opacity-20" />
-        <p>Please select a class to review marks and generate report cards.</p>
-      </div>
+      <PageTransition>
+        <div className="flex flex-col items-center justify-center h-[50vh] text-center gap-4">
+          <div className="p-5 rounded-3xl bg-white/5"><FileCheck className="h-10 w-10 text-muted-foreground opacity-30" /></div>
+          <p className="text-sm text-muted-foreground">{t('noClassSelected')}</p>
+        </div>
+      </PageTransition>
     );
   }
 
   return (
     <>
-      <Helmet><title>Marks & Report Cards — Vice Principal</title></Helmet>
+      <Helmet><title>{t('marksReportCards')} · CloudCampus</title></Helmet>
+      <PageTransition>
+        <div className="max-w-5xl mx-auto space-y-6">
 
-      <div className="space-y-6">
-        <div className="flex items-center gap-3">
-          <GraduationCap className="w-8 h-8 text-pink-500 shrink-0" />
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">
-              Marks &amp; Report Cards
-              {className && (
-                <Badge variant="outline" className="ml-3 text-sm bg-pink-500/10 text-pink-400 border-pink-500/30">
-                  {className}
-                </Badge>
-              )}
-            </h1>
-            <p className="text-muted-foreground text-sm mt-0.5">
-              Review submitted marks or generate ranked class report cards.
-            </p>
-          </div>
-        </div>
-
-        <Tabs defaultValue="marksheet" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 max-w-xs bg-muted/30">
-            <TabsTrigger value="marksheet" className="flex items-center gap-1.5 text-xs">
-              <ClipboardList className="w-4 h-4" /> Marksheet
-            </TabsTrigger>
-            <TabsTrigger value="reportcards" className="flex items-center gap-1.5 text-xs">
-              <BookOpen className="w-4 h-4" /> Report Cards
-            </TabsTrigger>
-          </TabsList>
-
-          {/* ── TAB 1 — Marksheet ── */}
-          <TabsContent value="marksheet" className="mt-6">
-            <Card className="glass">
-              <CardHeader>
-                <div className="flex items-center justify-between flex-wrap gap-3">
-                  <div>
-                    <CardTitle>Marksheet — {className}</CardTitle>
-                    <CardDescription>
-                      Marks submitted by teachers.{' '}
-                      {viewMode === 'organized'
-                        ? 'Grouped by sequence → subject → students.'
-                        : 'Chronological flat table.'}
-                    </CardDescription>
-                  </div>
-                  <div className="flex items-center gap-1 p-1 rounded-lg bg-white/5 border border-white/10">
-                    <button
-                      onClick={() => setViewMode('organized')}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all
-                        ${viewMode === 'organized'
-                          ? 'bg-pink-500 text-white shadow'
-                          : 'text-muted-foreground hover:text-foreground'}`}
-                    >
-                      <LayoutList className="w-3.5 h-3.5" /> Organized
-                    </button>
-                    <button
-                      onClick={() => setViewMode('flat')}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all
-                        ${viewMode === 'flat'
-                          ? 'bg-pink-500 text-white shadow'
-                          : 'text-muted-foreground hover:text-foreground'}`}
-                    >
-                      <Table2 className="w-3.5 h-3.5" /> Flat
-                    </button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {marksLoading ? (
-                  <div className="flex justify-center py-8">
-                    <Loader2 className="w-8 h-8 animate-spin text-pink-500" />
-                  </div>
-                ) : viewMode === 'organized' ? (
-                  <OrganizedView marks={marks} />
-                ) : (
-                  <FlatView marks={marks} />
+          {/* Header */}
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="p-3 rounded-2xl bg-gradient-to-br from-purple-500/20 to-pink-500/15">
+              <GraduationCap className="w-7 h-7 text-purple-400" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-400">
+                {t('marksReportCards')}
+                {className && (
+                  <span className="ml-3 text-sm font-bold px-3 py-1 rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/30 align-middle">
+                    {className}
+                  </span>
                 )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+              </h1>
+              <p className="text-sm text-muted-foreground mt-0.5">{t('marksReportDesc')}</p>
+            </div>
+          </div>
 
-          {/* ── TAB 2 — Report Cards ── */}
-          <TabsContent value="reportcards" className="mt-6 space-y-6">
-            <Card className="glass border-t-4 border-t-pink-500">
-              <CardHeader>
-                <CardTitle className="text-base">Step 1 — Select Sequences to Compile</CardTitle>
-                <CardDescription>
-                  Combine sequences (e.g. 1st + 2nd). Each subject mark will be the mean across selected
-                  sequences, then multiplied by its coefficient to compute the general average.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-5">
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {SEQUENCES.map(seq => (
-                    <label
-                      key={seq.value}
-                      className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer
-                        transition-all select-none
-                        ${selectedSeqs.includes(seq.value)
-                          ? 'bg-pink-500/15 border-pink-500/50 text-pink-200'
-                          : 'bg-white/5 border-white/10 hover:border-white/30 text-muted-foreground'
-                        }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedSeqs.includes(seq.value)}
-                        onChange={() => toggleSeq(seq.value)}
-                        className="w-4 h-4 rounded accent-pink-500 shrink-0 cursor-pointer"
-                      />
-                      <span className="text-sm font-medium">{seq.label}</span>
-                    </label>
-                  ))}
-                </div>
-                <Button
-                  onClick={handleGenerate}
-                  disabled={generating || !selectedSeqs.length}
-                  className="bg-pink-600 hover:bg-pink-700 text-white mt-2"
-                >
-                  {generating
-                    ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Generating…</>
-                    : <><RefreshCw className="w-4 h-4 mr-2" />Generate Report Cards</>}
-                </Button>
-              </CardContent>
-            </Card>
+          {/* Tab switcher */}
+          <div className="flex gap-2 p-1 bg-white/4 border border-white/8 rounded-2xl w-fit">
+            {[
+              { id: 'marksheet',    label: t('marksheet'),   icon: ClipboardList },
+              { id: 'reportcards',  label: t('reportCards'), icon: BookOpen      },
+            ].map(tab => (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                className={cn(
+                  'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200',
+                  activeTab === tab.id
+                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-md'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
+                )}>
+                <tab.icon className="h-4 w-4" /> {tab.label}
+              </button>
+            ))}
+          </div>
 
-            {generated && (
-              <Card className="glass">
-                <CardHeader>
-                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+          <AnimatePresence mode="wait">
+
+            {/* ── MARKSHEET ────────────────────────────── */}
+            {activeTab === 'marksheet' && (
+              <motion.div key="marksheet" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+                <div className="glass rounded-2xl overflow-hidden">
+                  {/* Card header */}
+                  <div className="flex items-center justify-between flex-wrap gap-3 px-6 pt-6 pb-4 border-b border-white/8">
                     <div>
-                      <CardTitle>{className} — {selectedSeqs.join(' + ')}</CardTitle>
-                      <CardDescription>
-                        {reportCards.length} students · {allSubjects.length} subjects ·{' '}
-                        <span className="text-green-400 font-medium">green</span> ≥ 10/20,{' '}
-                        <span className="text-red-400 font-medium">red</span> &lt; 10/20
-                      </CardDescription>
+                      <h2 className="font-bold text-base">{t('marksheet')} — {className}</h2>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {viewMode === 'organized' ? t('organizedViewDesc') : t('flatViewDesc')}
+                      </p>
                     </div>
-                    <div className="flex gap-2 shrink-0">
-                      <Button variant="outline" size="sm"
-                        onClick={() => exportCSV(reportCards, allSubjects, className, selectedSeqs)}
-                        className="border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10">
-                        <Download className="w-4 h-4 mr-1.5" /> CSV
-                      </Button>
-                      <Button variant="outline" size="sm"
-                        onClick={() => printCards(reportCards, allSubjects, className, selectedSeqs, schoolName)}
-                        className="border-blue-500/40 text-blue-400 hover:bg-blue-500/10">
-                        <Printer className="w-4 h-4 mr-1.5" /> Print / PDF
-                      </Button>
+                    <div className="flex items-center gap-1 p-1 bg-white/5 border border-white/8 rounded-xl">
+                      {[
+                        { id: 'organized', label: t('organizedView'), icon: LayoutList },
+                        { id: 'flat',      label: t('flatView'),      icon: Table2     },
+                      ].map(v => (
+                        <button key={v.id} onClick={() => setViewMode(v.id)}
+                          className={cn(
+                            'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
+                            viewMode === v.id
+                              ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow'
+                              : 'text-muted-foreground hover:text-foreground'
+                          )}>
+                          <v.icon className="h-3.5 w-3.5" /> {v.label}
+                        </button>
+                      ))}
                     </div>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  {reportCards.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">No students found in this class.</div>
-                  ) : (
-                    <div className="overflow-auto">
-                      <table className="text-sm border-collapse min-w-max w-full">
-                        <thead>
-                          <tr className="bg-white/5">
-                            <th className="sticky left-0 z-10 bg-card p-3 border border-white/10 text-center font-semibold whitespace-nowrap w-16">Rank</th>
-                            <th className="p-3 border border-white/10 text-left font-semibold whitespace-nowrap min-w-[160px]">Student</th>
-                            {allSubjects.map(sub => {
-                              const coef = reportCards[0]?.subjectRows.find(r => r.subject === sub)?.coef ?? 1;
-                              return (
-                                <th key={sub} className="p-3 border border-white/10 text-center font-semibold whitespace-nowrap">
-                                  <div className="text-xs">{sub}</div>
-                                  <div className="text-[10px] font-normal text-muted-foreground">coef {coef}</div>
-                                </th>
-                              );
-                            })}
-                            <th className="p-3 border border-white/10 text-center font-bold whitespace-nowrap bg-pink-500/10 text-pink-300 min-w-[100px]">
-                              Average /20
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {reportCards.map((student, idx) => (
-                            <tr key={student.matricule}
-                                className={`border-b border-white/10 hover:bg-white/5 ${idx % 2 !== 0 ? 'bg-white/[0.02]' : ''}`}>
-                              <td className="sticky left-0 z-10 bg-card p-3 border border-white/10 text-center font-bold">
-                                <span className={student.rank === 1 ? 'text-yellow-400' : student.rank === 2 ? 'text-slate-300' : student.rank === 3 ? 'text-orange-400' : ''}>
-                                  {ordinal(student.rank)}
-                                </span>
-                              </td>
-                              <td className="p-3 border border-white/10 font-medium whitespace-nowrap">{student.name}</td>
-                              {allSubjects.map(sub => {
-                                const row = student.subjectRows.find(r => r.subject === sub);
-                                if (!row || !row.offered) return (
-                                  <td key={sub} className="p-3 border border-white/10 text-center text-xs text-muted-foreground/40">N/A</td>
-                                );
-                                const mark = row.markOn20;
-                                const cls  = mark === null ? 'text-muted-foreground' : mark >= 10 ? 'text-green-400' : 'text-red-400';
-                                return (
-                                  <td key={sub} className={`p-3 border border-white/10 text-center font-mono font-semibold ${cls}`}>
-                                    {mark !== null ? mark.toFixed(2) : '—'}
-                                  </td>
-                                );
-                              })}
-                              <td className={`p-3 border border-white/10 text-center font-bold text-base bg-pink-500/5
-                                ${student.average === null ? 'text-muted-foreground' : student.average >= 10 ? 'text-green-300' : 'text-red-400'}`}>
-                                {student.average !== null ? student.average.toFixed(2) : '—'}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                  <div className="p-6">
+                    {marksLoading ? (
+                      <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-purple-400" /></div>
+                    ) : viewMode === 'organized'
+                      ? <OrganizedView marks={marks} t={t} />
+                      : <FlatView      marks={marks} t={t} />
+                    }
+                  </div>
+                </div>
+              </motion.div>
             )}
-          </TabsContent>
-        </Tabs>
-      </div>
+
+            {/* ── REPORT CARDS ─────────────────────────── */}
+            {activeTab === 'reportcards' && (
+              <motion.div key="reportcards" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                className="space-y-6">
+
+                {/* Step 1 */}
+                <div className="glass rounded-2xl p-6 space-y-5 border-t-2 border-t-purple-500/60">
+                  <div>
+                    <h2 className="font-bold text-base">{t('step1SelectSeqs')}</h2>
+                    <p className="text-xs text-muted-foreground mt-1">{t('step1Desc')}</p>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {SEQUENCES.map(seq => (
+                      <label key={seq.value} className={cn(
+                        'flex items-center gap-3 p-3 rounded-xl border cursor-pointer select-none transition-all',
+                        selectedSeqs.includes(seq.value)
+                          ? 'bg-purple-500/15 border-purple-500/50 text-purple-200'
+                          : 'bg-white/4 border-white/8 hover:border-white/20 text-muted-foreground'
+                      )}>
+                        <input type="checkbox" checked={selectedSeqs.includes(seq.value)}
+                          onChange={() => toggleSeq(seq.value)}
+                          className="w-4 h-4 rounded accent-purple-500 shrink-0 cursor-pointer" />
+                        <span className="text-sm font-medium">{seq.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <button onClick={handleGenerate} disabled={generating || !selectedSeqs.length}
+                    className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-semibold shadow-lg shadow-purple-500/25 transition-all active:scale-[0.98] disabled:opacity-50">
+                    {generating
+                      ? <><Loader2 className="h-4 w-4 animate-spin" />{t('generating')}</>
+                      : <><RefreshCw className="h-4 w-4" />{t('generateBtn')}</>}
+                  </button>
+                </div>
+
+                {/* Results */}
+                {generated && (
+                  <div className="glass rounded-2xl overflow-hidden">
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 px-6 pt-6 pb-4 border-b border-white/8">
+                      <div>
+                        <h2 className="font-bold text-base">{className} — {selectedSeqs.join(' + ')}</h2>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {reportCards.length} students · {allSubjects.length} subjects ·{' '}
+                          <span className="text-green-400">green</span> ≥ 10/20, <span className="text-red-400">red</span> &lt; 10/20
+                        </p>
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <button onClick={() => exportCSV(reportCards, allSubjects, className, selectedSeqs)}
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-all">
+                          <Download className="h-3.5 w-3.5" /> {t('downloadCSV')}
+                        </button>
+                        <button onClick={() => printCards(reportCards, allSubjects, className, selectedSeqs, schoolName)}
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20 transition-all">
+                          <Printer className="h-3.5 w-3.5" /> {t('printPDF')}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="p-4">
+                      {!reportCards.length ? (
+                        <p className="text-center py-8 text-muted-foreground text-sm">{t('noStudentsFound')}</p>
+                      ) : (
+                        <div className="overflow-auto">
+                          <table className="text-sm border-collapse min-w-max w-full">
+                            <thead>
+                              <tr className="bg-white/5">
+                                <th className="sticky left-0 z-10 bg-card p-3 border border-white/8 text-center font-semibold text-xs w-16">{t('rankLabel')}</th>
+                                <th className="p-3 border border-white/8 text-left font-semibold text-xs min-w-[160px]">{t('studentLabel')}</th>
+                                {allSubjects.map(sub => {
+                                  const coef = reportCards[0]?.subjectRows.find(r => r.subject === sub)?.coef ?? 1;
+                                  return (
+                                    <th key={sub} className="p-3 border border-white/8 text-center font-semibold text-xs">
+                                      <div>{sub}</div>
+                                      <div className="text-[10px] font-normal text-muted-foreground">coef {coef}</div>
+                                    </th>
+                                  );
+                                })}
+                                <th className="p-3 border border-white/8 text-center font-bold text-xs bg-purple-500/10 text-purple-300 min-w-[100px]">
+                                  {t('generalAverage')}
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {reportCards.map((s, idx) => (
+                                <tr key={s.matricule} className={cn('border-b border-white/8 hover:bg-white/4', idx % 2 !== 0 && 'bg-white/[0.015]')}>
+                                  <td className="sticky left-0 z-10 bg-card p-3 border border-white/8 text-center font-bold text-sm">
+                                    <span className={s.rank === 1 ? 'text-yellow-400' : s.rank === 2 ? 'text-slate-300' : s.rank === 3 ? 'text-orange-400' : ''}>
+                                      {ordinal(s.rank)}
+                                    </span>
+                                  </td>
+                                  <td className="p-3 border border-white/8 font-medium">{s.name}</td>
+                                  {allSubjects.map(sub => {
+                                    const row = s.subjectRows.find(r => r.subject === sub);
+                                    if (!row?.offered) return <td key={sub} className="p-3 border border-white/8 text-center text-xs text-muted-foreground/30">N/A</td>;
+                                    const clr = row.markOn20 === null ? 'text-muted-foreground' : row.markOn20 >= 10 ? 'text-green-400' : 'text-red-400';
+                                    return <td key={sub} className={cn('p-3 border border-white/8 text-center font-mono font-semibold text-sm', clr)}>{row.markOn20 !== null ? row.markOn20.toFixed(2) : '—'}</td>;
+                                  })}
+                                  <td className={cn('p-3 border border-white/8 text-center font-bold text-base bg-purple-500/5',
+                                    s.average === null ? 'text-muted-foreground' : s.average >= 10 ? 'text-green-300' : 'text-red-400'
+                                  )}>{s.average !== null ? s.average.toFixed(2) : '—'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            )}
+
+          </AnimatePresence>
+        </div>
+      </PageTransition>
     </>
   );
 };

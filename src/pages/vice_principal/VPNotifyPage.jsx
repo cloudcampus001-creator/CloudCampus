@@ -1,140 +1,148 @@
 import React, { useState } from 'react';
+import { motion } from 'framer-motion';
 import { Bell, Send, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { Helmet } from 'react-helmet';
+import { useLanguage } from '@/contexts/LanguageContext';
+import PageTransition from '@/components/PageTransition';
 
 const VPNotifyPage = ({ selectedClass }) => {
   const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    title: '',
-    content: '',
-    audience: 'class', // 'class' or 'specific_student' (simplified for now)
-  });
+  const { t }     = useLanguage();
+
+  const [loading,  setLoading]  = useState(false);
+  const [title,    setTitle]    = useState('');
+  const [content,  setContent]  = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!selectedClass) {
-        toast({ variant: "destructive", title: "No Class Selected", description: "Please select a class first." });
-        return;
+      toast({ variant: 'destructive', title: t('error'), description: t('vpNotifyNoClassToast') });
+      return;
     }
     setLoading(true);
-
     try {
-        const userName = localStorage.getItem('userName');
-        const schoolId = localStorage.getItem('schoolId');
-
-        // For 'class' audience, we target all parents of that class usually, or just a general notification linked to class ID
-        // The notifications table schema uses target_type and target_id.
-        // If target_type is 'class', target_id is the class ID.
-        
-        const { error } = await supabase.from('notifications').insert([{
-            sender_name: userName,
-            sender_role: 'vice_principal',
-            title: formData.title,
-            content: formData.content,
-            target_type: 'class',
-            target_id: parseInt(selectedClass),
-            school_id: parseInt(schoolId),
-            created_at: new Date().toISOString()
-        }]);
-
-        if (error) throw error;
-
-        toast({
-            title: "Notification Sent",
-            description: "The notification has been dispatched successfully.",
-            className: "bg-pink-500/10 border-pink-500/50 text-pink-500"
-        });
-        setFormData({ ...formData, title: '', content: '' });
-
-    } catch (error) {
-        console.error('Error sending notification:', error);
-        toast({ variant: "destructive", title: "Error", description: "Failed to send notification." });
-    } finally {
-        setLoading(false);
-    }
+      const userName = localStorage.getItem('userName');
+      const schoolId = localStorage.getItem('schoolId');
+      const { error } = await supabase.from('notifications').insert([{
+        sender_name: userName,
+        sender_role: 'vice_principal',
+        title,
+        content,
+        target_type: 'class',
+        target_id:   parseInt(selectedClass),
+        school_id:   parseInt(schoolId),
+        created_at:  new Date().toISOString(),
+      }]);
+      if (error) throw error;
+      toast({ title: `✓ ${t('success')}`, description: t('vpNotifySent') });
+      setTitle(''); setContent('');
+    } catch (err) {
+      console.error(err);
+      toast({ variant: 'destructive', title: t('error'), description: t('vpNotifyError') });
+    } finally { setLoading(false); }
   };
-
-  if (!selectedClass) {
-    return (
-      <div className="flex flex-col items-center justify-center h-[50vh] text-muted-foreground">
-        <Bell className="w-16 h-16 mb-4 opacity-20" />
-        <p>Please select a class to send notifications.</p>
-      </div>
-    );
-  }
 
   return (
     <>
-      <Helmet>
-        <title>Notify - Vice Principal</title>
-      </Helmet>
-      <div className="max-w-2xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Send Notification</h1>
-          <p className="text-muted-foreground">Broadcast messages to parents and students of the selected class.</p>
+      <Helmet><title>{t('vpNotifyTitle')} · CloudCampus</title></Helmet>
+      <PageTransition>
+        <div className="max-w-2xl mx-auto space-y-6">
+
+          {/* Header */}
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
+            <h1 className="text-3xl font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-400">
+              {t('vpNotifyTitle')}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">{t('vpNotifyDesc')}</p>
+          </motion.div>
+
+          {/* No class selected */}
+          {!selectedClass ? (
+            <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}>
+              <div className="glass rounded-2xl p-16 flex flex-col items-center text-center gap-4">
+                <div className="p-5 rounded-3xl bg-purple-500/10">
+                  <Bell className="h-10 w-10 text-purple-400 opacity-50" />
+                </div>
+                <div>
+                  <p className="font-semibold text-base">{t('vpNotifyNoClass')}</p>
+                  <p className="text-sm text-muted-foreground mt-1">{t('selectClass')}</p>
+                </div>
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+              <div className="glass rounded-2xl p-7 space-y-6 border-t-2 border-t-purple-500/60">
+
+                {/* Form header */}
+                <div className="flex items-center gap-3">
+                  <div className="p-3 rounded-xl bg-purple-500/15">
+                    <Bell className="h-5 w-5 text-purple-400" />
+                  </div>
+                  <div>
+                    <h2 className="font-bold text-lg">{t('vpNotifyCompose')}</h2>
+                    <p className="text-xs text-muted-foreground">{t('vpNotifyComposeDesc')}</p>
+                  </div>
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-5">
+                  {/* Audience pill (read-only) */}
+                  <div className="space-y-1.5">
+                    <Label className="text-sm font-medium">{t('vpNotifyAudience')}</Label>
+                    <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-white/4 border border-white/10 text-sm text-muted-foreground">
+                      <Bell className="h-4 w-4 text-purple-400 shrink-0" />
+                      {t('vpNotifyAudienceValue')}
+                      <span className="ml-auto px-2.5 py-0.5 rounded-full bg-purple-500/15 text-purple-400 text-[10px] font-bold border border-purple-500/25">
+                        {t('wholeClass')}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Title */}
+                  <div className="space-y-1.5">
+                    <Label className="text-sm font-medium">{t('vpNotifyTitleLabel')}</Label>
+                    <Input
+                      value={title}
+                      onChange={e => setTitle(e.target.value)}
+                      placeholder="e.g. Upcoming Exam Schedule"
+                      className="bg-white/5 border-white/10 focus:border-purple-500/50 rounded-xl h-11"
+                      required
+                    />
+                  </div>
+
+                  {/* Content */}
+                  <div className="space-y-1.5">
+                    <Label className="text-sm font-medium">{t('vpNotifyContent')}</Label>
+                    <Textarea
+                      value={content}
+                      onChange={e => setContent(e.target.value)}
+                      placeholder={t('vpNotifyContentPlaceholder')}
+                      className="bg-white/5 border-white/10 focus:border-purple-500/50 min-h-[150px] resize-none rounded-xl"
+                      required
+                    />
+                  </div>
+
+                  {/* Character hint */}
+                  <p className="text-[11px] text-muted-foreground text-right">{content.length} chars</p>
+
+                  <button
+                    type="submit" disabled={loading}
+                    className="w-full flex items-center justify-center gap-2 py-4 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-bold text-base shadow-xl shadow-purple-500/25 transition-all active:scale-[0.98] disabled:opacity-60"
+                  >
+                    {loading
+                      ? <><Loader2 className="h-5 w-5 animate-spin" /> {t('submitting')}</>
+                      : <><Send className="h-5 w-5" /> {t('vpNotifySend')}</>}
+                  </button>
+                </form>
+              </div>
+            </motion.div>
+          )}
         </div>
-
-        <Card className="glass border-t-4 border-t-pink-500">
-          <CardHeader>
-            <CardTitle>Compose Message</CardTitle>
-            <CardDescription>Notifications will be sent immediately via the mobile app.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-               <div className="space-y-2">
-                  <Label>Audience</Label>
-                  <Select defaultValue="class" disabled>
-                      <SelectTrigger>
-                          <SelectValue placeholder="Entire Class" />
-                      </SelectTrigger>
-                      <SelectContent>
-                          <SelectItem value="class">Entire Class (Parents & Students)</SelectItem>
-                      </SelectContent>
-                  </Select>
-               </div>
-               
-               <div className="space-y-2">
-                  <Label>Title</Label>
-                  <Input 
-                     placeholder="e.g., Upcoming Exam Schedule" 
-                     value={formData.title}
-                     onChange={e => setFormData({...formData, title: e.target.value})}
-                     required
-                  />
-               </div>
-
-               <div className="space-y-2">
-                  <Label>Content</Label>
-                  <Textarea 
-                     placeholder="Write your message here..." 
-                     className="min-h-[150px]"
-                     value={formData.content}
-                     onChange={e => setFormData({...formData, content: e.target.value})}
-                     required
-                  />
-               </div>
-
-               <Button 
-                  type="submit" 
-                  className="w-full bg-pink-600 hover:bg-pink-700 text-white" 
-                  disabled={loading}
-               >
-                  {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
-                  Send Notification
-               </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
+      </PageTransition>
     </>
   );
 };
