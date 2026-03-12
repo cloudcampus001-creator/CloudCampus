@@ -1,78 +1,120 @@
 /**
  * AdminSubjectsLibraryPage.jsx
- * src/pages/admin/AdminSubjectsLibraryPage.jsx
+ * ──────────────────────────────
+ * Three sections:
+ *  1. Subject Catalogue — add/delete school-wide subjects
+ *  2. Coefficients     — assign coefficient per subject per class
+ *  3. School Library   — REAL file upload via Supabase Storage (bucket: library-books)
  *
- * Three sections in one page:
- *  1. Subject Catalogue  — add / delete school-wide subjects
- *  2. Coefficients       — assign a coefficient per subject per class
- *  3. School Library     — upload/manage textbooks that parents can access
+ * Library "Publish" flow:
+ *  - Admin picks a PDF file from disk
+ *  - An optional cover image is also uploaded
+ *  - Both land in the "library-books" bucket, public URLs are stored in library_books table
+ *  - Parents can then view/download via the URL
  */
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   BookMarked, Plus, X, Loader2, Save, Book,
   Trash2, Library, Hash, School, ExternalLink,
+  Upload, FileText, Image, CheckCircle2,
 } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
 import { Helmet } from 'react-helmet';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { cn } from '@/lib/utils';
 
+const stagger = { hidden: {}, visible: { transition: { staggerChildren: 0.06 } } };
+const fadeUp  = { hidden: { opacity: 0, y: 12 }, visible: { opacity: 1, y: 0, transition: { duration: 0.3 } } };
+
+/* ── Gradient section header ── */
+const SectionHeader = ({ icon: Icon, title, desc, color }) => (
+  <div className="flex items-start gap-3 mb-5">
+    <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${color}15`, border: `1px solid ${color}25` }}>
+      <Icon className="h-5 w-5" style={{ color }} />
+    </div>
+    <div>
+      <h2 className="font-black text-lg">{title}</h2>
+      <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
+    </div>
+  </div>
+);
+
+/* ── File drop zone ── */
+const FileDropZone = ({ accept, label, hint, file, onFile }) => {
+  const ref = useRef();
+  const [over, setOver] = useState(false);
+  return (
+    <div
+      onDragOver={e => { e.preventDefault(); setOver(true); }}
+      onDragLeave={() => setOver(false)}
+      onDrop={e => { e.preventDefault(); setOver(false); const f = e.dataTransfer.files[0]; if (f) onFile(f); }}
+      onClick={() => ref.current?.click()}
+      className={cn('relative border-2 border-dashed rounded-2xl p-5 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all',
+        over ? 'border-indigo-500/60 bg-indigo-500/8' : file ? 'border-green-500/40 bg-green-500/6' : 'border-white/15 hover:border-white/25 hover:bg-white/4')}>
+      <input ref={ref} type="file" accept={accept} className="hidden" onChange={e => { if (e.target.files?.[0]) onFile(e.target.files[0]); }} />
+      {file ? (
+        <>
+          <CheckCircle2 className="h-7 w-7 text-green-400" />
+          <p className="text-sm font-semibold text-green-400 text-center truncate max-w-full px-4">{file.name}</p>
+          <p className="text-xs text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+        </>
+      ) : (
+        <>
+          <Upload className="h-7 w-7 text-muted-foreground" />
+          <p className="text-sm font-semibold">{label}</p>
+          <p className="text-xs text-muted-foreground">{hint}</p>
+        </>
+      )}
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════ */
 const AdminSubjectsLibraryPage = () => {
-  const { toast } = useToast();
-  const schoolId = localStorage.getItem('schoolId');
+  const { toast }   = useToast();
+  const { t }       = useLanguage();
+  const schoolId    = localStorage.getItem('schoolId');
 
-  // ── 1. Subject Catalogue state ───────────────────────────────────────────
-  const [subjects, setSubjects]         = useState([]);
-  const [newSubject, setNewSubject]     = useState('');
-  const [subjLoading, setSubjLoading]   = useState(true);
-  const [addingSubj, setAddingSubj]     = useState(false);
+  /* Subjects */
+  const [subjects,   setSubjects]   = useState([]);
+  const [newSubject, setNewSubject] = useState('');
+  const [subjLoading,setSubjLoading]= useState(true);
+  const [addingSubj, setAddingSubj] = useState(false);
 
-  // ── 2. Coefficients state ────────────────────────────────────────────────
-  const [classes, setClasses]             = useState([]);
-  const [selectedClass, setSelectedClass] = useState('');
-  const [coefficients, setCoefficients]   = useState({}); // { subjectName: coef }
-  const [coefLoading, setCoefLoading]     = useState(false);
-  const [savingCoef, setSavingCoef]       = useState(false);
+  /* Coefficients */
+  const [classes,        setClasses]        = useState([]);
+  const [selectedClass,  setSelectedClass]  = useState('');
+  const [coefficients,   setCoefficients]   = useState({});
+  const [coefLoading,    setCoefLoading]    = useState(false);
+  const [savingCoef,     setSavingCoef]     = useState(false);
 
-  // ── 3. Library state ─────────────────────────────────────────────────────
-  const [books, setBooks]             = useState([]);
-  const [booksLoading, setBooksLoading] = useState(true);
-  const [showBookForm, setShowBookForm] = useState(false);
-  const [savingBook, setSavingBook]     = useState(false);
-  const [newBook, setNewBook]           = useState({
-    title: '', author: '', subject: '', file_url: '', cover_image_url: '',
-  });
+  /* Library */
+  const [books,         setBooks]         = useState([]);
+  const [booksLoading,  setBooksLoading]  = useState(true);
+  const [showBookForm,  setShowBookForm]  = useState(false);
+  const [savingBook,    setSavingBook]    = useState(false);
+  const [uploadProgress,setUploadProgress]= useState(0);
+  const [bookFile,      setBookFile]      = useState(null);   // PDF
+  const [coverFile,     setCoverFile]     = useState(null);  // image
+  const [newBook, setNewBook] = useState({ title: '', author: '', subject: '', file_url: '', cover_image_url: '' });
 
-  // ── Initial loads ─────────────────────────────────────────────────────────
+  /* ── Init ── */
   useEffect(() => {
     if (!schoolId) return;
-    fetchSubjects();
-    fetchClasses();
-    fetchBooks();
+    fetchSubjects(); fetchClasses(); fetchBooks();
   }, [schoolId]);
 
-  // When class selection changes → load existing coefficients
-  useEffect(() => {
-    if (!selectedClass) return;
-    fetchCoefficients(selectedClass);
-  }, [selectedClass]);
+  useEffect(() => { if (selectedClass) fetchCoefficients(selectedClass); }, [selectedClass]);
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // SUBJECTS
-  // ─────────────────────────────────────────────────────────────────────────
+  /* ── Subjects ── */
   const fetchSubjects = async () => {
     setSubjLoading(true);
-    const { data } = await supabase
-      .from('school_subjects')
-      .select('*')
-      .eq('school_id', parseInt(schoolId))
-      .order('name');
+    const { data } = await supabase.from('school_subjects').select('*').eq('school_id', parseInt(schoolId)).order('name');
     setSubjects(data || []);
     setSubjLoading(false);
   };
@@ -81,57 +123,35 @@ const AdminSubjectsLibraryPage = () => {
     const name = newSubject.trim();
     if (!name) return;
     if (subjects.some(s => s.name.toLowerCase() === name.toLowerCase())) {
-      toast({ variant: 'destructive', title: 'Duplicate', description: 'Subject already exists.' });
-      return;
+      toast({ variant: 'destructive', title: 'Duplicate', description: 'Subject already exists.' }); return;
     }
     setAddingSubj(true);
     try {
-      const { data, error } = await supabase
-        .from('school_subjects')
-        .insert({ school_id: parseInt(schoolId), name })
-        .select().single();
+      const { data, error } = await supabase.from('school_subjects').insert({ school_id: parseInt(schoolId), name }).select().single();
       if (error) throw error;
       setSubjects(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
       setNewSubject('');
-      toast({ title: 'Subject added', description: `"${name}" added to catalogue.` });
-    } catch (err) {
-      toast({ variant: 'destructive', title: 'Error', description: err.message });
-    } finally {
-      setAddingSubj(false);
-    }
+      toast({ title: '✓ Subject added' });
+    } catch (err) { toast({ variant: 'destructive', title: 'Error', description: err.message }); }
+    finally { setAddingSubj(false); }
   };
 
   const handleDeleteSubject = async (id, name) => {
     const { error } = await supabase.from('school_subjects').delete().eq('id', id);
-    if (!error) {
-      setSubjects(prev => prev.filter(s => s.id !== id));
-      toast({ title: 'Removed', description: `"${name}" removed.` });
-    }
+    if (!error) { setSubjects(prev => prev.filter(s => s.id !== id)); toast({ title: `"${name}" removed` }); }
   };
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // COEFFICIENTS
-  // ─────────────────────────────────────────────────────────────────────────
+  /* ── Coefficients ── */
   const fetchClasses = async () => {
-    const { data } = await supabase
-      .from('classes')
-      .select('id, name')
-      .eq('school_id', parseInt(schoolId))
-      .order('name');
+    const { data } = await supabase.from('classes').select('id, name').eq('school_id', parseInt(schoolId)).order('name');
     setClasses(data || []);
   };
 
   const fetchCoefficients = async (classId) => {
     setCoefLoading(true);
-    const { data } = await supabase
-      .from('subject_coefficients')
-      .select('*')
-      .eq('class_id', parseInt(classId));
-
-    // Start with all school subjects defaulting to coefficient 1
+    const { data } = await supabase.from('subject_coefficients').select('*').eq('class_id', parseInt(classId));
     const coefMap = {};
     subjects.forEach(s => { coefMap[s.name] = '1'; });
-    // Override with saved values
     (data || []).forEach(row => { coefMap[row.subject_name] = String(row.coefficient); });
     setCoefficients(coefMap);
     setCoefLoading(false);
@@ -141,451 +161,334 @@ const AdminSubjectsLibraryPage = () => {
     if (!selectedClass) return;
     setSavingCoef(true);
     try {
-      // Build upsert rows for all subjects that have a coefficient set
       const rows = Object.entries(coefficients)
         .filter(([, v]) => v !== '' && !isNaN(parseFloat(v)))
-        .map(([subject_name, coef]) => ({
-          school_id:    parseInt(schoolId),
-          class_id:     parseInt(selectedClass),
-          subject_name,
-          coefficient:  parseFloat(coef),
-        }));
-
-      const { error } = await supabase
-        .from('subject_coefficients')
-        .upsert(rows, { onConflict: 'class_id,subject_name' });
-
+        .map(([subject_name, coef]) => ({ school_id: parseInt(schoolId), class_id: parseInt(selectedClass), subject_name, coefficient: parseFloat(coef) }));
+      const { error } = await supabase.from('subject_coefficients').upsert(rows, { onConflict: 'class_id,subject_name' });
       if (error) throw error;
-      toast({ title: 'Coefficients saved', description: 'All coefficients updated for this class.' });
-    } catch (err) {
-      toast({ variant: 'destructive', title: 'Error', description: err.message });
-    } finally {
-      setSavingCoef(false);
-    }
+      toast({ title: '✓ Coefficients saved', className: 'bg-indigo-500/10 border-indigo-500/50 text-indigo-400' });
+    } catch (err) { toast({ variant: 'destructive', title: 'Error', description: err.message }); }
+    finally { setSavingCoef(false); }
   };
 
-  const updateCoef = (subjectName, value) => {
-    // Only allow numbers between 0 and 20
-    if (value === '' || (parseFloat(value) >= 0 && parseFloat(value) <= 20)) {
-      setCoefficients(prev => ({ ...prev, [subjectName]: value }));
-    }
-  };
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // LIBRARY
-  // ─────────────────────────────────────────────────────────────────────────
+  /* ── Library ── */
   const fetchBooks = async () => {
     setBooksLoading(true);
-    const { data } = await supabase
-      .from('library_books')
-      .select('*')
-      .eq('school_id', parseInt(schoolId))
-      .order('created_at', { ascending: false });
+    const { data } = await supabase.from('library_books').select('*').eq('school_id', parseInt(schoolId)).order('created_at', { ascending: false });
     setBooks(data || []);
     setBooksLoading(false);
   };
 
+  /* Upload helper — uploads to Supabase storage bucket "library-books" */
+  const uploadFile = async (file, folder) => {
+    const ext   = file.name.split('.').pop();
+    const path  = `${folder}/${schoolId}_${Date.now()}.${ext}`;
+    const { data, error } = await supabase.storage.from('library-books').upload(path, file, { upsert: true });
+    if (error) throw error;
+    const { data: urlData } = supabase.storage.from('library-books').getPublicUrl(path);
+    return urlData.publicUrl;
+  };
+
   const handleAddBook = async (e) => {
     e.preventDefault();
-    if (!newBook.title.trim() || !newBook.file_url.trim()) {
-      toast({ variant: 'destructive', title: 'Required fields', description: 'Title and file URL are required.' });
-      return;
+    if (!newBook.title.trim()) {
+      toast({ variant: 'destructive', title: 'Title required' }); return;
+    }
+    if (!bookFile && !newBook.file_url.trim()) {
+      toast({ variant: 'destructive', title: 'File required', description: 'Upload a PDF or enter a URL.' }); return;
     }
     setSavingBook(true);
+    setUploadProgress(10);
     try {
-      const { data, error } = await supabase
-        .from('library_books')
-        .insert({
-          school_id:       parseInt(schoolId),
-          title:           newBook.title.trim(),
-          author:          newBook.author.trim() || null,
-          subject:         newBook.subject.trim() || null,
-          file_url:        newBook.file_url.trim(),
-          cover_image_url: newBook.cover_image_url.trim() || null,
-        })
-        .select().single();
+      let fileUrl = newBook.file_url.trim();
+      let coverUrl = newBook.cover_image_url.trim();
+
+      if (bookFile) {
+        setUploadProgress(30);
+        fileUrl = await uploadFile(bookFile, 'pdfs');
+        setUploadProgress(70);
+      }
+      if (coverFile) {
+        coverUrl = await uploadFile(coverFile, 'covers');
+        setUploadProgress(85);
+      }
+
+      const { data, error } = await supabase.from('library_books').insert({
+        school_id: parseInt(schoolId),
+        title:           newBook.title.trim(),
+        author:          newBook.author.trim() || null,
+        subject:         newBook.subject.trim() || null,
+        file_url:        fileUrl,
+        cover_image_url: coverUrl || null,
+      }).select().single();
+
       if (error) throw error;
+      setUploadProgress(100);
       setBooks(prev => [data, ...prev]);
       setNewBook({ title: '', author: '', subject: '', file_url: '', cover_image_url: '' });
+      setBookFile(null); setCoverFile(null);
       setShowBookForm(false);
-      toast({ title: 'Book added', description: `"${data.title}" added to library.` });
-    } catch (err) {
-      toast({ variant: 'destructive', title: 'Error', description: err.message });
-    } finally {
-      setSavingBook(false);
-    }
+      toast({ title: '✓ Book published to library!', className: 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400' });
+    } catch (err) { toast({ variant: 'destructive', title: 'Upload Failed', description: err.message }); }
+    finally { setSavingBook(false); setUploadProgress(0); }
   };
 
   const handleDeleteBook = async (id, title) => {
     const { error } = await supabase.from('library_books').delete().eq('id', id);
-    if (!error) {
-      setBooks(prev => prev.filter(b => b.id !== id));
-      toast({ title: 'Removed', description: `"${title}" removed from library.` });
-    }
+    if (!error) { setBooks(prev => prev.filter(b => b.id !== id)); toast({ title: `"${title}" removed` }); }
   };
 
   const selectedClassName = classes.find(c => c.id.toString() === selectedClass)?.name || '';
 
   return (
     <>
-      <Helmet><title>Subjects & Library — Admin</title></Helmet>
+      <Helmet><title>Subjects & Library · Admin</title></Helmet>
+      <motion.div variants={stagger} initial="hidden" animate="visible" className="space-y-8 pb-6 max-w-4xl">
 
-      <div className="space-y-8 max-w-5xl mx-auto">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Subjects &amp; Library</h1>
-          <p className="text-muted-foreground">
-            Manage the school subject catalogue, per-class coefficients, and the digital library.
-          </p>
-        </div>
+        {/* Page header */}
+        <motion.div variants={fadeUp}>
+          <h1 className="text-3xl font-black tracking-tight">Subjects & Library</h1>
+          <p className="text-muted-foreground text-sm mt-1">Manage subjects, coefficients, and the school digital library.</p>
+        </motion.div>
 
-        {/* ══════════════════════════════════════════════════════════════
-            SECTION 1 — Subject Catalogue
-        ══════════════════════════════════════════════════════════════ */}
-        <Card className="glass border-t-4 border-t-violet-500">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BookMarked className="w-5 h-5 text-violet-500" />
-              Subject Catalogue
-            </CardTitle>
-            <CardDescription>
-              Define all subjects taught in your school. These appear as options when assigning
-              subjects to classes and when creating timetable entries.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex gap-2">
-              <Input
-                placeholder="e.g. Mathematics, Physics, History…"
-                value={newSubject}
-                onChange={e => setNewSubject(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddSubject(); } }}
-                className="bg-background/50"
-              />
-              <Button
-                onClick={handleAddSubject}
-                disabled={addingSubj || !newSubject.trim()}
-                className="bg-violet-600 hover:bg-violet-700 shrink-0"
-              >
-                {addingSubj ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
-                Add
-              </Button>
-            </div>
+        {/* ═══ SECTION 1: Subject Catalogue ═══ */}
+        <motion.div variants={fadeUp} className="glass rounded-2xl p-6 border border-violet-500/20"
+          style={{ borderTop: '2px solid #8b5cf650' }}>
+          <SectionHeader icon={BookMarked} title="Subject Catalogue" color="#8b5cf6"
+            desc="Define all subjects taught. These are used for class assignments, timetables, and the teacher profile." />
+          <div className="flex gap-2 mb-5">
+            <Input placeholder="e.g. Mathematics, Physics, History…"
+              className="h-11 bg-white/5 border-white/10 rounded-xl focus:border-violet-500/50"
+              value={newSubject} onChange={e => setNewSubject(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddSubject(); } }} />
+            <button onClick={handleAddSubject} disabled={addingSubj || !newSubject.trim()}
+              className="px-4 h-11 rounded-xl font-bold text-sm text-white flex items-center gap-1.5 disabled:opacity-50 shrink-0"
+              style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)' }}>
+              {addingSubj ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add
+            </button>
+          </div>
+          {subjLoading ? (
+            <div className="flex gap-2 flex-wrap">{[1,2,3,4].map(i => <div key={i} className="animate-pulse h-8 w-24 rounded-full bg-white/5" />)}</div>
+          ) : subjects.length === 0 ? (
+            <p className="text-sm text-muted-foreground italic text-center py-4">No subjects yet. Type a name above and click Add.</p>
+          ) : (
+            <motion.div variants={stagger} initial="hidden" animate="visible" className="flex flex-wrap gap-2">
+              {subjects.map(s => (
+                <motion.div key={s.id} variants={fadeUp}
+                  className="flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 rounded-full text-sm font-semibold"
+                  style={{ background: '#8b5cf615', border: '1px solid #8b5cf630', color: '#c4b5fd' }}>
+                  {s.name}
+                  <button onClick={() => handleDeleteSubject(s.id, s.name)}
+                    className="h-5 w-5 rounded-full flex items-center justify-center hover:bg-violet-500/30 transition-colors">
+                    <X className="h-3 w-3" />
+                  </button>
+                </motion.div>
+              ))}
+            </motion.div>
+          )}
+          <p className="text-xs text-muted-foreground mt-4">{subjects.length} subject{subjects.length !== 1 ? 's' : ''} in catalogue</p>
+        </motion.div>
 
-            {subjLoading ? (
-              <div className="flex justify-center py-4"><Loader2 className="h-6 w-6 animate-spin text-violet-500" /></div>
-            ) : subjects.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4 italic">
-                No subjects yet. Type a name above and click Add.
-              </p>
-            ) : (
-              <div className="flex flex-wrap gap-2 pt-1">
+        {/* ═══ SECTION 2: Coefficients ═══ */}
+        <motion.div variants={fadeUp} className="glass rounded-2xl p-6 border border-indigo-500/20"
+          style={{ borderTop: '2px solid #6366f150' }}>
+          <SectionHeader icon={Hash} title="Subject Coefficients by Class" color="#6366f1"
+            desc="Assign a weighting to each subject per class. Default is 1 if not set." />
+          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center mb-5">
+            <span className="text-sm font-semibold shrink-0 text-muted-foreground">Select Class:</span>
+            <Select value={selectedClass} onValueChange={setSelectedClass}>
+              <SelectTrigger className="h-11 w-full sm:w-64 bg-white/5 border-white/10 rounded-xl">
+                <SelectValue placeholder="Choose a class…" />
+              </SelectTrigger>
+              <SelectContent>{classes.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          {!selectedClass ? (
+            <p className="text-sm text-muted-foreground italic text-center py-6">Select a class above to configure coefficients.</p>
+          ) : coefLoading ? (
+            <div className="flex justify-center py-6"><Loader2 className="h-6 w-6 animate-spin text-indigo-400" /></div>
+          ) : subjects.length === 0 ? (
+            <p className="text-sm text-muted-foreground italic text-center py-6">No subjects in catalogue. Add subjects above first.</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 mb-4">
                 {subjects.map(s => (
-                  <motion.div
-                    key={s.id}
-                    initial={{ opacity: 0, scale: 0.85 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 rounded-full
-                               bg-violet-500/15 border border-violet-500/30 text-sm font-medium text-violet-300"
-                  >
-                    {s.name}
-                    <button
-                      onClick={() => handleDeleteSubject(s.id, s.name)}
-                      className="h-4 w-4 rounded-full flex items-center justify-center
-                                 hover:bg-violet-500/40 transition-colors ml-0.5"
-                      title="Remove"
-                    >
-                      <X className="h-2.5 w-2.5" />
-                    </button>
-                  </motion.div>
+                  <div key={s.name} className="flex items-center justify-between p-3 rounded-xl bg-white/4 border border-white/8 hover:border-indigo-500/25 transition-colors">
+                    <span className="text-sm font-medium truncate mr-2">{s.name}</span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-xs text-muted-foreground">×</span>
+                      <Input type="number" className="w-16 h-8 text-center text-sm bg-white/5 border-white/10 rounded-lg px-1"
+                        value={coefficients[s.name] ?? '1'}
+                        onChange={e => { const v = e.target.value; if (v === '' || (parseFloat(v) >= 0 && parseFloat(v) <= 20)) setCoefficients(p => ({ ...p, [s.name]: v })); }}
+                        step="0.5" min="0" max="20" />
+                    </div>
+                  </div>
                 ))}
               </div>
-            )}
-            <p className="text-xs text-muted-foreground">
-              {subjects.length} subject{subjects.length !== 1 ? 's' : ''} in catalogue
-            </p>
-          </CardContent>
-        </Card>
+              <button onClick={handleSaveCoefficients} disabled={savingCoef}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm text-white disabled:opacity-60"
+                style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', boxShadow: '0 6px 20px rgba(99,102,241,0.25)' }}>
+                {savingCoef ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Save for {selectedClassName}
+              </button>
+            </>
+          )}
+        </motion.div>
 
-        {/* ══════════════════════════════════════════════════════════════
-            SECTION 2 — Coefficients per Class
-        ══════════════════════════════════════════════════════════════ */}
-        <Card className="glass border-t-4 border-t-indigo-500">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Hash className="w-5 h-5 text-indigo-500" />
-              Subject Coefficients by Class
-            </CardTitle>
-            <CardDescription>
-              Assign a coefficient (weighting) to each subject for a specific class.
-              The same subject can have a different coefficient in different classes.
-              Default is 1 if not set.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            {/* Class selector */}
-            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-              <Label className="text-sm font-medium shrink-0">Select Class:</Label>
-              <Select value={selectedClass} onValueChange={setSelectedClass}>
-                <SelectTrigger className="w-full sm:w-64 bg-background/50">
-                  <SelectValue placeholder="Choose a class…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {classes.map(c => (
-                    <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {selectedClass && (
-                <Badge variant="outline" className="bg-indigo-500/10 text-indigo-400 border-indigo-500/30">
-                  <School className="w-3 h-3 mr-1" />{selectedClassName}
-                </Badge>
-              )}
-            </div>
+        {/* ═══ SECTION 3: Library ═══ */}
+        <motion.div variants={fadeUp} className="glass rounded-2xl p-6 border border-emerald-500/20"
+          style={{ borderTop: '2px solid #22c55e50' }}>
+          <div className="flex items-start justify-between mb-5">
+            <SectionHeader icon={Library} title="School Library" color="#22c55e"
+              desc="Upload PDFs and textbooks. Parents and students can download them from the app." />
+            <button onClick={() => setShowBookForm(v => !v)}
+              className={cn('flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-sm border transition-all shrink-0 mt-0.5',
+                showBookForm ? 'bg-white/8 border-white/15 text-muted-foreground' : 'bg-emerald-500/15 border-emerald-500/35 text-emerald-400 hover:bg-emerald-500/20')}>
+              {showBookForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {showBookForm ? 'Cancel' : 'Add Book'}
+            </button>
+          </div>
 
-            {!selectedClass ? (
-              <p className="text-sm text-muted-foreground italic text-center py-6">
-                Select a class above to configure subject coefficients.
-              </p>
-            ) : coefLoading ? (
-              <div className="flex justify-center py-6">
-                <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
-              </div>
-            ) : subjects.length === 0 ? (
-              <p className="text-sm text-muted-foreground italic text-center py-6">
-                No subjects in catalogue yet. Add subjects above first.
-              </p>
-            ) : (
-              <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {subjects.map(s => (
-                    <div
-                      key={s.name}
-                      className="flex items-center justify-between p-3 rounded-lg
-                                 bg-white/5 border border-white/10 hover:border-indigo-500/30 transition-colors"
-                    >
-                      <span className="text-sm font-medium truncate mr-3">{s.name}</span>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="text-xs text-muted-foreground">Coef</span>
-                        <Input
-                          type="number"
-                          className="w-16 h-8 text-center text-sm bg-background/50 px-1"
-                          value={coefficients[s.name] ?? '1'}
-                          onChange={e => updateCoef(s.name, e.target.value)}
-                          step="0.5"
-                          min="0"
-                          max="20"
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <Button
-                  onClick={handleSaveCoefficients}
-                  disabled={savingCoef}
-                  className="bg-indigo-600 hover:bg-indigo-700"
-                >
-                  {savingCoef
-                    ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    : <Save className="h-4 w-4 mr-2" />}
-                  Save Coefficients for {selectedClassName}
-                </Button>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* ══════════════════════════════════════════════════════════════
-            SECTION 3 — School Library
-        ══════════════════════════════════════════════════════════════ */}
-        <Card className="glass border-t-4 border-t-emerald-500">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Library className="w-5 h-5 text-emerald-500" />
-                  School Library
-                </CardTitle>
-                <CardDescription>
-                  Upload textbooks and resources that parents and students can download.
-                </CardDescription>
-              </div>
-              <Button
-                onClick={() => setShowBookForm(v => !v)}
-                variant={showBookForm ? 'secondary' : 'default'}
-                className={!showBookForm ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
-                size="sm"
-              >
-                {showBookForm ? <X className="h-4 w-4 mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
-                {showBookForm ? 'Cancel' : 'Add Book'}
-              </Button>
-            </div>
-          </CardHeader>
-
-          <CardContent className="space-y-5">
-            {/* Add book form */}
+          {/* Add book form */}
+          <AnimatePresence>
             {showBookForm && (
-              <motion.div
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="p-4 rounded-xl bg-white/5 border border-emerald-500/30 space-y-4"
-              >
-                <h3 className="text-sm font-semibold text-emerald-400">New Textbook</h3>
-                <form onSubmit={handleAddBook} className="space-y-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label>Title <span className="text-red-400">*</span></Label>
-                      <Input
-                        placeholder="e.g. Advanced Mathematics Vol. 1"
-                        value={newBook.title}
-                        onChange={e => setNewBook(p => ({ ...p, title: e.target.value }))}
-                        className="bg-background/50"
-                        required
-                      />
+              <motion.form initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.25 }}
+                onSubmit={handleAddBook}
+                className="overflow-hidden mb-6">
+                <div className="p-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 space-y-4">
+                  <h3 className="font-black text-emerald-400 flex items-center gap-2"><Book className="h-4 w-4" /> New Textbook</h3>
+
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Title <span className="text-red-400">*</span></Label>
+                      <Input placeholder="e.g. Advanced Mathematics Vol. 1"
+                        className="h-11 bg-white/5 border-white/10 rounded-xl focus:border-emerald-500/40"
+                        value={newBook.title} onChange={e => setNewBook(p => ({ ...p, title: e.target.value }))} required />
                     </div>
-                    <div className="space-y-1">
-                      <Label>Author</Label>
-                      <Input
-                        placeholder="e.g. P. Tchatchoua"
-                        value={newBook.author}
-                        onChange={e => setNewBook(p => ({ ...p, author: e.target.value }))}
-                        className="bg-background/50"
-                      />
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Author</Label>
+                      <Input placeholder="e.g. P. Tchatchoua"
+                        className="h-11 bg-white/5 border-white/10 rounded-xl focus:border-emerald-500/40"
+                        value={newBook.author} onChange={e => setNewBook(p => ({ ...p, author: e.target.value }))} />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label>Subject</Label>
-                      <Select
-                        value={newBook.subject}
-                        onValueChange={v => setNewBook(p => ({ ...p, subject: v }))}
-                      >
-                        <SelectTrigger className="bg-background/50">
-                          <SelectValue placeholder="Choose subject…" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="">— None —</SelectItem>
-                          {subjects.map(s => (
-                            <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1">
-                      <Label>Cover Image URL</Label>
-                      <Input
-                        placeholder="https://… (optional)"
-                        value={newBook.cover_image_url}
-                        onChange={e => setNewBook(p => ({ ...p, cover_image_url: e.target.value }))}
-                        className="bg-background/50"
-                      />
-                    </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Subject</Label>
+                    <Select value={newBook.subject} onValueChange={v => setNewBook(p => ({ ...p, subject: v }))}>
+                      <SelectTrigger className="h-11 bg-white/5 border-white/10 rounded-xl"><SelectValue placeholder="Choose subject…" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">— None —</SelectItem>
+                        {subjects.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                   </div>
 
-                  <div className="space-y-1">
-                    <Label>File URL (PDF / Download Link) <span className="text-red-400">*</span></Label>
-                    <Input
-                      placeholder="https://…"
-                      value={newBook.file_url}
-                      onChange={e => setNewBook(p => ({ ...p, file_url: e.target.value }))}
-                      className="bg-background/50"
-                      required
-                    />
+                  {/* PDF upload */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+                      <FileText className="h-3.5 w-3.5 text-emerald-400" /> PDF File <span className="text-red-400">*</span>
+                    </Label>
+                    <FileDropZone accept=".pdf,application/pdf" label="Drop PDF here or click to browse"
+                      hint="PDF only · max 50 MB" file={bookFile} onFile={setBookFile} />
+                    {!bookFile && (
+                      <div className="flex items-center gap-2">
+                        <div className="h-px flex-1 bg-white/8" />
+                        <span className="text-xs text-muted-foreground">or paste URL</span>
+                        <div className="h-px flex-1 bg-white/8" />
+                      </div>
+                    )}
+                    {!bookFile && (
+                      <Input placeholder="https://… (external PDF link)"
+                        className="h-11 bg-white/5 border-white/10 rounded-xl focus:border-emerald-500/40"
+                        value={newBook.file_url} onChange={e => setNewBook(p => ({ ...p, file_url: e.target.value }))} />
+                    )}
                   </div>
 
-                  <Button
-                    type="submit"
-                    disabled={savingBook}
-                    className="w-full bg-emerald-600 hover:bg-emerald-700"
-                  >
-                    {savingBook
-                      ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      : <Book className="h-4 w-4 mr-2" />}
-                    Add to Library
-                  </Button>
-                </form>
-              </motion.div>
-            )}
+                  {/* Cover upload */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+                      <Image className="h-3.5 w-3.5 text-emerald-400" /> Cover Image (optional)
+                    </Label>
+                    <FileDropZone accept="image/*" label="Drop cover image or click to browse"
+                      hint="JPG, PNG · max 5 MB" file={coverFile} onFile={setCoverFile} />
+                  </div>
 
-            {/* Books list */}
-            {booksLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-emerald-500" />
-              </div>
-            ) : books.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <Library className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                <p className="text-sm">No books in library yet. Click "Add Book" to start.</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {books.map((book, idx) => (
-                  <motion.div
-                    key={book.id}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: idx * 0.03 }}
-                    className="flex items-center justify-between p-3 rounded-lg
-                               bg-white/5 border border-white/10 hover:border-emerald-500/30
-                               group transition-colors"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      {book.cover_image_url ? (
-                        <img
-                          src={book.cover_image_url}
-                          alt={book.title}
-                          className="w-10 h-12 object-cover rounded shrink-0"
-                        />
-                      ) : (
-                        <div className="w-10 h-12 rounded bg-emerald-500/20 flex items-center justify-center shrink-0">
-                          <Book className="w-5 h-5 text-emerald-500" />
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                        <p className="font-medium text-sm truncate">{book.title}</p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          {book.author && (
-                            <span className="text-xs text-muted-foreground truncate">{book.author}</span>
-                          )}
-                          {book.subject && (
-                            <Badge variant="secondary" className="text-[10px] shrink-0">{book.subject}</Badge>
-                          )}
-                        </div>
+                  {/* Progress bar */}
+                  {savingBook && uploadProgress > 0 && (
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Uploading…</span><span>{uploadProgress}%</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-white/8 overflow-hidden">
+                        <motion.div className="h-full rounded-full bg-emerald-500"
+                          animate={{ width: `${uploadProgress}%` }} transition={{ duration: 0.3 }} />
                       </div>
                     </div>
+                  )}
 
-                    <div className="flex items-center gap-2 shrink-0 ml-2">
-                      <a
-                        href={book.file_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-1.5 rounded-lg text-muted-foreground hover:text-emerald-400
-                                   hover:bg-emerald-500/10 transition-colors"
-                        title="Open file"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                      </a>
-                      <button
-                        onClick={() => handleDeleteBook(book.id, book.title)}
-                        className="p-1.5 rounded-lg text-muted-foreground hover:text-red-400
-                                   hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100"
-                        title="Remove"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
+                  <button type="submit" disabled={savingBook}
+                    className="w-full py-3.5 rounded-2xl font-bold text-sm text-white flex items-center justify-center gap-2 disabled:opacity-60"
+                    style={{ background: 'linear-gradient(135deg,#16a34a,#22c55e)', boxShadow: '0 6px 20px rgba(34,197,94,0.25)' }}>
+                    {savingBook ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                    {savingBook ? 'Publishing…' : 'Publish to Library'}
+                  </button>
+                </div>
+              </motion.form>
             )}
+          </AnimatePresence>
 
-            <p className="text-xs text-muted-foreground">
-              {books.length} book{books.length !== 1 ? 's' : ''} in library
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+          {/* Books list */}
+          {booksLoading ? (
+            <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="animate-pulse h-16 rounded-2xl bg-white/5" />)}</div>
+          ) : books.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-14 text-muted-foreground">
+              <Library className="h-12 w-12 opacity-15 mb-3" />
+              <p className="text-sm">No books yet. Click "Add Book" to publish the first one.</p>
+            </div>
+          ) : (
+            <motion.div variants={stagger} initial="hidden" animate="visible" className="space-y-2">
+              {books.map(book => (
+                <motion.div key={book.id} variants={fadeUp}
+                  className="group flex items-center gap-4 p-4 rounded-2xl border border-white/8 hover:border-emerald-500/25 bg-white/3 hover:bg-white/5 transition-all">
+                  {book.cover_image_url ? (
+                    <img src={book.cover_image_url} alt={book.title}
+                      className="w-10 h-12 object-cover rounded-xl shrink-0 border border-white/10" />
+                  ) : (
+                    <div className="w-10 h-12 rounded-xl bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                      <Book className="h-5 w-5 text-emerald-400" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-sm truncate">{book.title}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {book.author && <span className="text-xs text-muted-foreground truncate">{book.author}</span>}
+                      {book.subject && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/12 border border-emerald-500/20 text-emerald-400 font-semibold shrink-0">
+                          {book.subject}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <a href={book.file_url} target="_blank" rel="noopener noreferrer"
+                      className="h-8 w-8 rounded-xl flex items-center justify-center text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10 transition-all"
+                      title="Open file">
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                    <button onClick={() => handleDeleteBook(book.id, book.title)}
+                      className="h-8 w-8 rounded-xl flex items-center justify-center text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </motion.div>
+              ))}
+            </motion.div>
+          )}
+          <p className="text-xs text-muted-foreground mt-4">{books.length} book{books.length !== 1 ? 's' : ''} in library</p>
+        </motion.div>
+      </motion.div>
     </>
   );
 };
