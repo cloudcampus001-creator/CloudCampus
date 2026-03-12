@@ -1,11 +1,5 @@
 /**
  * AdminClassesPage.jsx
- * ────────────────────
- * Changes:
- *  ✓ Class ID field (required) when creating a new class — since id is primary key
- *  ✓ Full glass-card redesign matching admin aesthetic (indigo/violet)
- *  ✓ Bottom-sheet style dialogs with glass styling
- *  ✓ All original Supabase logic preserved
  */
 import React, { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet';
@@ -78,7 +72,7 @@ const AdminClassesPage = () => {
       setDms(dmData || []);
       setSchoolSubjects(subData || []);
     } catch {
-      toast({ variant: 'destructive', title: 'Error', description: 'Failed to load classes.' });
+      toast({ variant: 'destructive', title: t('error'), description: t('failedToLoadUsers') });
     } finally { setLoading(false); }
   };
 
@@ -99,9 +93,8 @@ const AdminClassesPage = () => {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    // Validate ID for new classes
     if (!editingClass && !formData.id) {
-      toast({ variant: 'destructive', title: 'Class ID required', description: 'Please enter a numeric ID for this class.' });
+      toast({ variant: 'destructive', title: t('classIdRequired'), description: t('classIdRequiredDesc') });
       return;
     }
     setFormLoading(true);
@@ -132,11 +125,11 @@ const AdminClassesPage = () => {
         );
       }
 
-      toast({ title: `✓ Class ${editingClass ? 'updated' : 'created'}`, className: 'bg-green-500/10 border-green-500/50 text-green-400' });
+      toast({ title: `✓ ${editingClass ? t('classUpdated') : t('classCreated')}`, className: 'bg-green-500/10 border-green-500/50 text-green-400' });
       setSheetOpen(false);
       fetchData();
     } catch (err) {
-      toast({ variant: 'destructive', title: 'Save Failed', description: err.message });
+      toast({ variant: 'destructive', title: t('saveFailed'), description: err.message });
     } finally { setFormLoading(false); }
   };
 
@@ -146,16 +139,16 @@ const AdminClassesPage = () => {
       const { error } = await supabase.from('classes').delete().eq('id', deleteTarget);
       if (error) throw error;
       setClasses(prev => prev.filter(c => c.id !== deleteTarget));
-      toast({ title: 'Class Deleted' });
+      toast({ title: t('classDeleted') });
       setDeleteTarget(null);
     } catch {
-      toast({ variant: 'destructive', title: 'Delete Failed', description: 'Ensure no students are assigned first.' });
+      toast({ variant: 'destructive', title: t('deleteFailed'), description: t('ensureNoStudents') });
     }
   };
 
   return (
     <>
-      <Helmet><title>Class Management · Admin</title></Helmet>
+      <Helmet><title>{t('classManagement')} · Admin</title></Helmet>
 
       <div className="space-y-7 pb-6">
 
@@ -163,20 +156,20 @@ const AdminClassesPage = () => {
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
           className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-black tracking-tight">Class Management</h1>
-            <p className="text-muted-foreground text-sm mt-0.5">Manage classes, sectors, staff assignments and subjects.</p>
+            <h1 className="text-3xl font-black tracking-tight">{t('classManagement')}</h1>
+            <p className="text-muted-foreground text-sm mt-0.5">{t('classManagementDesc')}</p>
           </div>
           <button onClick={() => openSheet()}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm text-white transition-all active:scale-[0.98] self-start sm:self-auto"
             style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', boxShadow: '0 6px 20px rgba(99,102,241,0.3)' }}>
-            <Plus className="h-4 w-4" /> Add Class
+            <Plus className="h-4 w-4" /> {t('addClass')}
           </button>
         </motion.div>
 
         {/* Search */}
         <div className="relative">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <Input placeholder="Search classes…" className="pl-10 h-11 bg-white/5 border-white/10 rounded-xl"
+          <Input placeholder={t('searchClassesPlaceholder')} className="pl-10 h-11 bg-white/5 border-white/10 rounded-xl"
             value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
         </div>
 
@@ -188,7 +181,7 @@ const AdminClassesPage = () => {
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 glass rounded-2xl border border-white/8 gap-4 text-muted-foreground">
             <School className="h-12 w-12 opacity-15" />
-            <p>No classes found.</p>
+            <p>{t('noClassesFound')}</p>
           </div>
         ) : (
           <motion.div variants={stagger} initial="hidden" animate="visible"
@@ -203,7 +196,7 @@ const AdminClassesPage = () => {
                     <h3 className="font-black text-lg">{cls.name}</h3>
                     <div className="flex items-center gap-2 mt-1">
                       <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/12 border border-indigo-500/20 text-indigo-400 font-semibold">
-                        {cls.sector || 'General'}
+                        {cls.sector || t('generalSector')}
                       </span>
                       <span className="text-[11px] text-muted-foreground">ID: {cls.id}</span>
                     </div>
@@ -222,11 +215,11 @@ const AdminClassesPage = () => {
                 <div className="space-y-1.5 text-sm text-muted-foreground">
                   <div className="flex items-center gap-2">
                     <UserCheck className="h-3.5 w-3.5 text-pink-400 shrink-0" />
-                    <span className="truncate">VP: {cls.vice_principals?.name || 'Unassigned'}</span>
+                    <span className="truncate">{t('vpPrefix')} {cls.vice_principals?.name || t('unassigned')}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Shield className="h-3.5 w-3.5 text-orange-400 shrink-0" />
-                    <span className="truncate">DM: {cls.discipline_masters?.name || 'Unassigned'}</span>
+                    <span className="truncate">{t('dmPrefix')} {cls.discipline_masters?.name || t('unassigned')}</span>
                   </div>
                 </div>
               </motion.div>
@@ -253,7 +246,7 @@ const AdminClassesPage = () => {
                 <div className="flex justify-center mb-4">
                   <div className="h-1 w-10 bg-white/20 rounded-full" />
                 </div>
-                <h2 className="text-xl font-black mb-5">{editingClass ? 'Edit Class' : 'Create New Class'}</h2>
+                <h2 className="text-xl font-black mb-5">{editingClass ? t('editClass') : t('createNewClass')}</h2>
 
                 <form onSubmit={handleSave} className="space-y-5">
                   {/* Class ID — only for new classes */}
@@ -261,24 +254,24 @@ const AdminClassesPage = () => {
                     <div className="space-y-1.5">
                       <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
                         <Hash className="h-3.5 w-3.5 text-red-400" />
-                        Class ID <span className="text-red-400">*</span>
+                        {t('classIdLabel')} <span className="text-red-400">*</span>
                       </Label>
                       <Input type="number" placeholder="e.g. 101 (must be unique)"
                         className="h-11 bg-white/5 border-white/10 rounded-xl focus:border-indigo-500/50"
                         value={formData.id || ''} onChange={e => setFormData({ ...formData, id: e.target.value })} required />
-                      <p className="text-[11px] text-muted-foreground">The ID is the primary key and cannot be changed later.</p>
+                      <p className="text-[11px] text-muted-foreground">{t('classIdHint')}</p>
                     </div>
                   )}
 
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Class Name</Label>
+                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('classNameLabel')}</Label>
                     <Input placeholder="e.g. Form 5 Science A"
                       className="h-11 bg-white/5 border-white/10 rounded-xl focus:border-indigo-500/50"
                       value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Sector / Stream</Label>
+                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('sectorStream')}</Label>
                     <Input placeholder="e.g. Science, Arts"
                       className="h-11 bg-white/5 border-white/10 rounded-xl focus:border-indigo-500/50"
                       value={formData.sector || ''} onChange={e => setFormData({ ...formData, sector: e.target.value })} />
@@ -286,25 +279,25 @@ const AdminClassesPage = () => {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Vice Principal</Label>
+                      <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('vicePrincipalLabel')}</Label>
                       <Select value={formData.vp_id || ''} onValueChange={v => setFormData({ ...formData, vp_id: v })}>
                         <SelectTrigger className="h-11 bg-white/5 border-white/10 rounded-xl">
-                          <SelectValue placeholder="Select VP" />
+                          <SelectValue placeholder={t('selectVP')} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="unassigned">Unassigned</SelectItem>
+                          <SelectItem value="unassigned">{t('unassigned')}</SelectItem>
                           {vps.map(vp => <SelectItem key={vp.id} value={vp.id.toString()}>{vp.name}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Discipline Master</Label>
+                      <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('disciplineMasterLabel')}</Label>
                       <Select value={formData.dm_id || ''} onValueChange={v => setFormData({ ...formData, dm_id: v })}>
                         <SelectTrigger className="h-11 bg-white/5 border-white/10 rounded-xl">
-                          <SelectValue placeholder="Select DM" />
+                          <SelectValue placeholder={t('selectDM')} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="unassigned">Unassigned</SelectItem>
+                          <SelectItem value="unassigned">{t('unassigned')}</SelectItem>
                           {dms.map(dm => <SelectItem key={dm.id} value={dm.id.toString()}>{dm.name}</SelectItem>)}
                         </SelectContent>
                       </Select>
@@ -315,13 +308,13 @@ const AdminClassesPage = () => {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
-                        <BookOpen className="h-3.5 w-3.5 text-indigo-400" /> Subjects
+                        <BookOpen className="h-3.5 w-3.5 text-indigo-400" /> {t('subjectsLabel')}
                       </Label>
-                      <span className="text-xs text-muted-foreground">{selectedSubjects.size} selected</span>
+                      <span className="text-xs text-muted-foreground">{selectedSubjects.size} {t('selectedCountLabel')}</span>
                     </div>
                     {schoolSubjects.length === 0 ? (
                       <p className="text-xs text-muted-foreground p-3 rounded-xl bg-white/5 border border-white/10">
-                        No subjects in catalogue yet. Add them in Subjects & Library first.
+                        {t('noSubjectsInCatalogue')}
                       </p>
                     ) : (
                       <div className="grid grid-cols-2 gap-2 max-h-44 overflow-y-auto p-3 rounded-xl bg-white/4 border border-white/8">
@@ -341,13 +334,13 @@ const AdminClassesPage = () => {
                   <div className="grid grid-cols-2 gap-3 pt-2">
                     <button type="button" onClick={() => setSheetOpen(false)}
                       className="py-3.5 rounded-2xl font-bold text-sm border border-white/15 bg-white/5 hover:bg-white/10 transition-all">
-                      Cancel
+                      {t('cancel')}
                     </button>
                     <button type="submit" disabled={formLoading}
                       className="py-3.5 rounded-2xl font-bold text-sm text-white flex items-center justify-center gap-2 transition-all active:scale-[0.97] disabled:opacity-60"
                       style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', boxShadow: '0 6px 20px rgba(99,102,241,0.3)' }}>
                       {formLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                      Save Class
+                      {t('saveClass')}
                     </button>
                   </div>
                 </form>
@@ -369,17 +362,17 @@ const AdminClassesPage = () => {
               className="fixed inset-0 z-50 flex items-center justify-center p-4">
               <div className="glass rounded-3xl p-7 border border-white/15 max-w-sm w-full"
                 style={{ boxShadow: '0 16px 60px rgba(239,68,68,0.15)' }}>
-                <h2 className="text-xl font-black mb-2">Delete Class?</h2>
-                <p className="text-sm text-muted-foreground mb-6">This will fail if students are still assigned to this class.</p>
+                <h2 className="text-xl font-black mb-2">{t('deleteClassTitle')}</h2>
+                <p className="text-sm text-muted-foreground mb-6">{t('deleteClassDesc')}</p>
                 <div className="grid grid-cols-2 gap-3">
                   <button onClick={() => setDeleteTarget(null)}
                     className="py-3.5 rounded-2xl font-bold text-sm border border-white/15 bg-white/5 hover:bg-white/10 transition-all">
-                    Cancel
+                    {t('cancel')}
                   </button>
                   <button onClick={confirmDelete}
                     className="py-3.5 rounded-2xl font-bold text-sm text-white transition-all active:scale-[0.97]"
                     style={{ background: 'linear-gradient(135deg,#ef4444,#dc2626)', boxShadow: '0 6px 20px rgba(239,68,68,0.3)' }}>
-                    Delete
+                    {t('delete')}
                   </button>
                 </div>
               </div>

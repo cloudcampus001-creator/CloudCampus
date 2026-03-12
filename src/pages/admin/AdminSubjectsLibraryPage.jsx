@@ -1,16 +1,5 @@
 /**
  * AdminSubjectsLibraryPage.jsx
- * ──────────────────────────────
- * Three sections:
- *  1. Subject Catalogue — add/delete school-wide subjects
- *  2. Coefficients     — assign coefficient per subject per class
- *  3. School Library   — REAL file upload via Supabase Storage (bucket: library-books)
- *
- * Library "Publish" flow:
- *  - Admin picks a PDF file from disk
- *  - An optional cover image is also uploaded
- *  - Both land in the "library-books" bucket, public URLs are stored in library_books table
- *  - Parents can then view/download via the URL
  */
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -99,8 +88,8 @@ const AdminSubjectsLibraryPage = () => {
   const [showBookForm,  setShowBookForm]  = useState(false);
   const [savingBook,    setSavingBook]    = useState(false);
   const [uploadProgress,setUploadProgress]= useState(0);
-  const [bookFile,      setBookFile]      = useState(null);   // PDF
-  const [coverFile,     setCoverFile]     = useState(null);  // image
+  const [bookFile,      setBookFile]      = useState(null);
+  const [coverFile,     setCoverFile]     = useState(null);
   const [newBook, setNewBook] = useState({ title: '', author: '', subject: '', file_url: '', cover_image_url: '' });
 
   /* ── Init ── */
@@ -123,7 +112,7 @@ const AdminSubjectsLibraryPage = () => {
     const name = newSubject.trim();
     if (!name) return;
     if (subjects.some(s => s.name.toLowerCase() === name.toLowerCase())) {
-      toast({ variant: 'destructive', title: 'Duplicate', description: 'Subject already exists.' }); return;
+      toast({ variant: 'destructive', title: t('duplicate'), description: t('subjectAlreadyExists') }); return;
     }
     setAddingSubj(true);
     try {
@@ -131,14 +120,14 @@ const AdminSubjectsLibraryPage = () => {
       if (error) throw error;
       setSubjects(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
       setNewSubject('');
-      toast({ title: '✓ Subject added' });
-    } catch (err) { toast({ variant: 'destructive', title: 'Error', description: err.message }); }
+      toast({ title: '✓ ' + t('subjectAdded') });
+    } catch (err) { toast({ variant: 'destructive', title: t('error'), description: err.message }); }
     finally { setAddingSubj(false); }
   };
 
   const handleDeleteSubject = async (id, name) => {
     const { error } = await supabase.from('school_subjects').delete().eq('id', id);
-    if (!error) { setSubjects(prev => prev.filter(s => s.id !== id)); toast({ title: `"${name}" removed` }); }
+    if (!error) { setSubjects(prev => prev.filter(s => s.id !== id)); toast({ title: `"${name}" ${t('subjectRemoved')}` }); }
   };
 
   /* ── Coefficients ── */
@@ -166,8 +155,8 @@ const AdminSubjectsLibraryPage = () => {
         .map(([subject_name, coef]) => ({ school_id: parseInt(schoolId), class_id: parseInt(selectedClass), subject_name, coefficient: parseFloat(coef) }));
       const { error } = await supabase.from('subject_coefficients').upsert(rows, { onConflict: 'class_id,subject_name' });
       if (error) throw error;
-      toast({ title: '✓ Coefficients saved', className: 'bg-indigo-500/10 border-indigo-500/50 text-indigo-400' });
-    } catch (err) { toast({ variant: 'destructive', title: 'Error', description: err.message }); }
+      toast({ title: '✓ ' + t('save'), className: 'bg-indigo-500/10 border-indigo-500/50 text-indigo-400' });
+    } catch (err) { toast({ variant: 'destructive', title: t('error'), description: err.message }); }
     finally { setSavingCoef(false); }
   };
 
@@ -179,7 +168,6 @@ const AdminSubjectsLibraryPage = () => {
     setBooksLoading(false);
   };
 
-  /* Upload helper — uploads to Supabase storage bucket "library-books" */
   const uploadFile = async (file, folder) => {
     const ext   = file.name.split('.').pop();
     const path  = `${folder}/${schoolId}_${Date.now()}.${ext}`;
@@ -192,10 +180,10 @@ const AdminSubjectsLibraryPage = () => {
   const handleAddBook = async (e) => {
     e.preventDefault();
     if (!newBook.title.trim()) {
-      toast({ variant: 'destructive', title: 'Title required' }); return;
+      toast({ variant: 'destructive', title: t('titleRequired') }); return;
     }
     if (!bookFile && !newBook.file_url.trim()) {
-      toast({ variant: 'destructive', title: 'File required', description: 'Upload a PDF or enter a URL.' }); return;
+      toast({ variant: 'destructive', title: t('fileRequired'), description: t('fileRequiredDesc') }); return;
     }
     setSavingBook(true);
     setUploadProgress(10);
@@ -228,49 +216,49 @@ const AdminSubjectsLibraryPage = () => {
       setNewBook({ title: '', author: '', subject: '', file_url: '', cover_image_url: '' });
       setBookFile(null); setCoverFile(null);
       setShowBookForm(false);
-      toast({ title: '✓ Book published to library!', className: 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400' });
-    } catch (err) { toast({ variant: 'destructive', title: 'Upload Failed', description: err.message }); }
+      toast({ title: '✓ ' + t('bookPublished'), className: 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400' });
+    } catch (err) { toast({ variant: 'destructive', title: t('uploadFailed'), description: err.message }); }
     finally { setSavingBook(false); setUploadProgress(0); }
   };
 
   const handleDeleteBook = async (id, title) => {
     const { error } = await supabase.from('library_books').delete().eq('id', id);
-    if (!error) { setBooks(prev => prev.filter(b => b.id !== id)); toast({ title: `"${title}" removed` }); }
+    if (!error) { setBooks(prev => prev.filter(b => b.id !== id)); toast({ title: `"${title}" ${t('subjectRemoved')}` }); }
   };
 
   const selectedClassName = classes.find(c => c.id.toString() === selectedClass)?.name || '';
 
   return (
     <>
-      <Helmet><title>Subjects & Library · Admin</title></Helmet>
+      <Helmet><title>{t('subjectsLibraryTitle')} · Admin</title></Helmet>
       <motion.div variants={stagger} initial="hidden" animate="visible" className="space-y-8 pb-6 max-w-4xl">
 
         {/* Page header */}
         <motion.div variants={fadeUp}>
-          <h1 className="text-3xl font-black tracking-tight">Subjects & Library</h1>
-          <p className="text-muted-foreground text-sm mt-1">Manage subjects, coefficients, and the school digital library.</p>
+          <h1 className="text-3xl font-black tracking-tight">{t('subjectsLibraryTitle')}</h1>
+          <p className="text-muted-foreground text-sm mt-1">{t('subjectsLibraryDesc')}</p>
         </motion.div>
 
         {/* ═══ SECTION 1: Subject Catalogue ═══ */}
         <motion.div variants={fadeUp} className="glass rounded-2xl p-6 border border-violet-500/20"
           style={{ borderTop: '2px solid #8b5cf650' }}>
-          <SectionHeader icon={BookMarked} title="Subject Catalogue" color="#8b5cf6"
-            desc="Define all subjects taught. These are used for class assignments, timetables, and the teacher profile." />
+          <SectionHeader icon={BookMarked} title={t('subjectCatalogue')} color="#8b5cf6"
+            desc={t('subjectCatalogueDesc')} />
           <div className="flex gap-2 mb-5">
-            <Input placeholder="e.g. Mathematics, Physics, History…"
+            <Input placeholder={t('subjectInputPlaceholder')}
               className="h-11 bg-white/5 border-white/10 rounded-xl focus:border-violet-500/50"
               value={newSubject} onChange={e => setNewSubject(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddSubject(); } }} />
             <button onClick={handleAddSubject} disabled={addingSubj || !newSubject.trim()}
               className="px-4 h-11 rounded-xl font-bold text-sm text-white flex items-center gap-1.5 disabled:opacity-50 shrink-0"
               style={{ background: 'linear-gradient(135deg,#7c3aed,#8b5cf6)' }}>
-              {addingSubj ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add
+              {addingSubj ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} {t('add')}
             </button>
           </div>
           {subjLoading ? (
             <div className="flex gap-2 flex-wrap">{[1,2,3,4].map(i => <div key={i} className="animate-pulse h-8 w-24 rounded-full bg-white/5" />)}</div>
           ) : subjects.length === 0 ? (
-            <p className="text-sm text-muted-foreground italic text-center py-4">No subjects yet. Type a name above and click Add.</p>
+            <p className="text-sm text-muted-foreground italic text-center py-4">{t('noSubjectsAddFirst')}</p>
           ) : (
             <motion.div variants={stagger} initial="hidden" animate="visible" className="flex flex-wrap gap-2">
               {subjects.map(s => (
@@ -286,29 +274,31 @@ const AdminSubjectsLibraryPage = () => {
               ))}
             </motion.div>
           )}
-          <p className="text-xs text-muted-foreground mt-4">{subjects.length} subject{subjects.length !== 1 ? 's' : ''} in catalogue</p>
+          <p className="text-xs text-muted-foreground mt-4">
+            {subjects.length} {subjects.length !== 1 ? t('subjectsCount') : t('subjectCount')} {t('inCatalogue')}
+          </p>
         </motion.div>
 
         {/* ═══ SECTION 2: Coefficients ═══ */}
         <motion.div variants={fadeUp} className="glass rounded-2xl p-6 border border-indigo-500/20"
           style={{ borderTop: '2px solid #6366f150' }}>
-          <SectionHeader icon={Hash} title="Subject Coefficients by Class" color="#6366f1"
-            desc="Assign a weighting to each subject per class. Default is 1 if not set." />
+          <SectionHeader icon={Hash} title={t('subjectCoefficients')} color="#6366f1"
+            desc={t('subjectCoefficientsDesc')} />
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center mb-5">
-            <span className="text-sm font-semibold shrink-0 text-muted-foreground">Select Class:</span>
+            <span className="text-sm font-semibold shrink-0 text-muted-foreground">{t('selectClassLabel')}</span>
             <Select value={selectedClass} onValueChange={setSelectedClass}>
               <SelectTrigger className="h-11 w-full sm:w-64 bg-white/5 border-white/10 rounded-xl">
-                <SelectValue placeholder="Choose a class…" />
+                <SelectValue placeholder={t('chooseClassPlaceholder')} />
               </SelectTrigger>
               <SelectContent>{classes.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           {!selectedClass ? (
-            <p className="text-sm text-muted-foreground italic text-center py-6">Select a class above to configure coefficients.</p>
+            <p className="text-sm text-muted-foreground italic text-center py-6">{t('configureCoefficients')}</p>
           ) : coefLoading ? (
             <div className="flex justify-center py-6"><Loader2 className="h-6 w-6 animate-spin text-indigo-400" /></div>
           ) : subjects.length === 0 ? (
-            <p className="text-sm text-muted-foreground italic text-center py-6">No subjects in catalogue. Add subjects above first.</p>
+            <p className="text-sm text-muted-foreground italic text-center py-6">{t('noSubjectsAddFirst')}</p>
           ) : (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 mb-4">
@@ -329,7 +319,7 @@ const AdminSubjectsLibraryPage = () => {
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm text-white disabled:opacity-60"
                 style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', boxShadow: '0 6px 20px rgba(99,102,241,0.25)' }}>
                 {savingCoef ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                Save for {selectedClassName}
+                {t('saveFor')} {selectedClassName}
               </button>
             </>
           )}
@@ -339,13 +329,13 @@ const AdminSubjectsLibraryPage = () => {
         <motion.div variants={fadeUp} className="glass rounded-2xl p-6 border border-emerald-500/20"
           style={{ borderTop: '2px solid #22c55e50' }}>
           <div className="flex items-start justify-between mb-5">
-            <SectionHeader icon={Library} title="School Library" color="#22c55e"
-              desc="Upload PDFs and textbooks. Parents and students can download them from the app." />
+            <SectionHeader icon={Library} title={t('schoolLibraryAdminTitle')} color="#22c55e"
+              desc={t('schoolLibraryAdminDesc')} />
             <button onClick={() => setShowBookForm(v => !v)}
               className={cn('flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-sm border transition-all shrink-0 mt-0.5',
                 showBookForm ? 'bg-white/8 border-white/15 text-muted-foreground' : 'bg-emerald-500/15 border-emerald-500/35 text-emerald-400 hover:bg-emerald-500/20')}>
               {showBookForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-              {showBookForm ? 'Cancel' : 'Add Book'}
+              {showBookForm ? t('cancel') : t('addBook')}
             </button>
           </div>
 
@@ -357,17 +347,17 @@ const AdminSubjectsLibraryPage = () => {
                 onSubmit={handleAddBook}
                 className="overflow-hidden mb-6">
                 <div className="p-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 space-y-4">
-                  <h3 className="font-black text-emerald-400 flex items-center gap-2"><Book className="h-4 w-4" /> New Textbook</h3>
+                  <h3 className="font-black text-emerald-400 flex items-center gap-2"><Book className="h-4 w-4" /> {t('newTextbook')}</h3>
 
                   <div className="grid sm:grid-cols-2 gap-3">
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Title <span className="text-red-400">*</span></Label>
+                      <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('titleLabel')} <span className="text-red-400">*</span></Label>
                       <Input placeholder="e.g. Advanced Mathematics Vol. 1"
                         className="h-11 bg-white/5 border-white/10 rounded-xl focus:border-emerald-500/40"
                         value={newBook.title} onChange={e => setNewBook(p => ({ ...p, title: e.target.value }))} required />
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Author</Label>
+                      <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('authorLabel')}</Label>
                       <Input placeholder="e.g. P. Tchatchoua"
                         className="h-11 bg-white/5 border-white/10 rounded-xl focus:border-emerald-500/40"
                         value={newBook.author} onChange={e => setNewBook(p => ({ ...p, author: e.target.value }))} />
@@ -375,11 +365,11 @@ const AdminSubjectsLibraryPage = () => {
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Subject</Label>
+                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('subjectSelectLabel')}</Label>
                     <Select value={newBook.subject} onValueChange={v => setNewBook(p => ({ ...p, subject: v }))}>
-                      <SelectTrigger className="h-11 bg-white/5 border-white/10 rounded-xl"><SelectValue placeholder="Choose subject…" /></SelectTrigger>
+                      <SelectTrigger className="h-11 bg-white/5 border-white/10 rounded-xl"><SelectValue placeholder={t('chooseClassPlaceholder')} /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">— None —</SelectItem>
+                        <SelectItem value="">— {t('selectNone')} —</SelectItem>
                         {subjects.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -388,19 +378,19 @@ const AdminSubjectsLibraryPage = () => {
                   {/* PDF upload */}
                   <div className="space-y-1.5">
                     <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
-                      <FileText className="h-3.5 w-3.5 text-emerald-400" /> PDF File <span className="text-red-400">*</span>
+                      <FileText className="h-3.5 w-3.5 text-emerald-400" /> {t('pdfFileLabel')} <span className="text-red-400">*</span>
                     </Label>
-                    <FileDropZone accept=".pdf,application/pdf" label="Drop PDF here or click to browse"
-                      hint="PDF only · max 50 MB" file={bookFile} onFile={setBookFile} />
+                    <FileDropZone accept=".pdf,application/pdf" label={t('dropPDF')}
+                      hint={t('pdfHint')} file={bookFile} onFile={setBookFile} />
                     {!bookFile && (
                       <div className="flex items-center gap-2">
                         <div className="h-px flex-1 bg-white/8" />
-                        <span className="text-xs text-muted-foreground">or paste URL</span>
+                        <span className="text-xs text-muted-foreground">{t('orPasteURL')}</span>
                         <div className="h-px flex-1 bg-white/8" />
                       </div>
                     )}
                     {!bookFile && (
-                      <Input placeholder="https://… (external PDF link)"
+                      <Input placeholder={t('externalPDFLink')}
                         className="h-11 bg-white/5 border-white/10 rounded-xl focus:border-emerald-500/40"
                         value={newBook.file_url} onChange={e => setNewBook(p => ({ ...p, file_url: e.target.value }))} />
                     )}
@@ -409,17 +399,17 @@ const AdminSubjectsLibraryPage = () => {
                   {/* Cover upload */}
                   <div className="space-y-1.5">
                     <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
-                      <Image className="h-3.5 w-3.5 text-emerald-400" /> Cover Image (optional)
+                      <Image className="h-3.5 w-3.5 text-emerald-400" /> {t('coverImageLabel')}
                     </Label>
-                    <FileDropZone accept="image/*" label="Drop cover image or click to browse"
-                      hint="JPG, PNG · max 5 MB" file={coverFile} onFile={setCoverFile} />
+                    <FileDropZone accept="image/*" label={t('dropCoverImage')}
+                      hint={t('coverHint')} file={coverFile} onFile={setCoverFile} />
                   </div>
 
                   {/* Progress bar */}
                   {savingBook && uploadProgress > 0 && (
                     <div className="space-y-1.5">
                       <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>Uploading…</span><span>{uploadProgress}%</span>
+                        <span>{t('uploading')}</span><span>{uploadProgress}%</span>
                       </div>
                       <div className="h-2 rounded-full bg-white/8 overflow-hidden">
                         <motion.div className="h-full rounded-full bg-emerald-500"
@@ -432,7 +422,7 @@ const AdminSubjectsLibraryPage = () => {
                     className="w-full py-3.5 rounded-2xl font-bold text-sm text-white flex items-center justify-center gap-2 disabled:opacity-60"
                     style={{ background: 'linear-gradient(135deg,#16a34a,#22c55e)', boxShadow: '0 6px 20px rgba(34,197,94,0.25)' }}>
                     {savingBook ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                    {savingBook ? 'Publishing…' : 'Publish to Library'}
+                    {savingBook ? t('uploading') : t('publishToLibrary')}
                   </button>
                 </div>
               </motion.form>
@@ -445,7 +435,7 @@ const AdminSubjectsLibraryPage = () => {
           ) : books.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-14 text-muted-foreground">
               <Library className="h-12 w-12 opacity-15 mb-3" />
-              <p className="text-sm">No books yet. Click "Add Book" to publish the first one.</p>
+              <p className="text-sm">{t('noBooksPublished')}</p>
             </div>
           ) : (
             <motion.div variants={stagger} initial="hidden" animate="visible" className="space-y-2">
@@ -474,7 +464,7 @@ const AdminSubjectsLibraryPage = () => {
                   <div className="flex items-center gap-1 shrink-0">
                     <a href={book.file_url} target="_blank" rel="noopener noreferrer"
                       className="h-8 w-8 rounded-xl flex items-center justify-center text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10 transition-all"
-                      title="Open file">
+                      title={t('openNewTab')}>
                       <ExternalLink className="h-4 w-4" />
                     </a>
                     <button onClick={() => handleDeleteBook(book.id, book.title)}
@@ -486,7 +476,9 @@ const AdminSubjectsLibraryPage = () => {
               ))}
             </motion.div>
           )}
-          <p className="text-xs text-muted-foreground mt-4">{books.length} book{books.length !== 1 ? 's' : ''} in library</p>
+          <p className="text-xs text-muted-foreground mt-4">
+            {books.length} {books.length !== 1 ? t('booksCount') : t('bookCount')} {t('inCatalogue')}
+          </p>
         </motion.div>
       </motion.div>
     </>

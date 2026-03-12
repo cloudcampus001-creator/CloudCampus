@@ -1,12 +1,5 @@
 /**
  * AdminHome.jsx  —  Administrator Dashboard
- * ────────────────────────────────────────────
- * Changes vs original:
- *  ✓ Recharts REMOVED — replaced with custom animated progress bars & rings
- *  ✓ Notification compose form hidden until "Broadcast" button clicked
- *  ✓ Recent broadcasts hidden until "View Broadcasts" toggled, with delete
- *  ✓ Full indigo/violet brand design, glass cards, translations
- *  ✓ All original Supabase logic preserved
  */
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -81,7 +74,7 @@ const AdminHome = () => {
   const { toast }   = useToast();
   const { t, lang } = useLanguage();
   const schoolId    = localStorage.getItem('schoolId');
-  const userName    = localStorage.getItem('userName') || 'Admin';
+  const userName    = localStorage.getItem('userName') || t('admin');
 
   const [stats,   setStats]   = useState({ totalStudents: 0, totalTeachers: 0, totalClasses: 0, disciplineCases: 0 });
   const [loading, setLoading] = useState(true);
@@ -135,11 +128,11 @@ const AdminHome = () => {
         target_type: newNotif.target_type, school_id: parseInt(schoolId),
       }]);
       if (error) throw error;
-      toast({ title: '✓ Notification Published', className: 'bg-indigo-500/10 border-indigo-500/50 text-indigo-400' });
+      toast({ title: '✓ ' + t('notifPublished'), className: 'bg-indigo-500/10 border-indigo-500/50 text-indigo-400' });
       setNewNotif({ title: '', content: '', target_type: 'school' });
       setShowForm(false);
       fetchNotifications();
-    } catch { toast({ variant: 'destructive', title: 'Error', description: 'Failed to publish.' }); }
+    } catch { toast({ variant: 'destructive', title: t('error'), description: t('failedToPublish') }); }
     finally { setNotifLoading(false); }
   };
 
@@ -147,26 +140,25 @@ const AdminHome = () => {
     const { error } = await supabase.from('notifications').delete().eq('id', id);
     if (!error) {
       setNotifications(prev => prev.filter(n => n.id !== id));
-      toast({ title: 'Deleted' });
+      toast({ title: t('deleted') });
     }
   };
 
   /* ── derived stats for visual ── */
-  const maxVal = Math.max(stats.totalStudents, 1);
-  const greet  = lang === 'fr' ? 'Bonjour' : 'Welcome back,';
+  const greet  = lang === 'fr' ? t('welcomeBack') : t('welcomeBack');
   const dateStr = new Date().toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-GB',
     { weekday: 'long', day: 'numeric', month: 'long' });
 
   const TARGET_OPTIONS = [
-    { value: 'school',           label: 'Global (Everyone)' },
-    { value: 'teacher',          label: 'Teachers Only' },
-    { value: 'vice_principal',   label: 'Vice Principals' },
-    { value: 'discipline_master',label: 'Discipline Masters' },
+    { value: 'school',            label: t('targetGlobal') },
+    { value: 'teacher',           label: t('targetTeachers') },
+    { value: 'vice_principal',    label: t('targetVPs') },
+    { value: 'discipline_master', label: t('targetDMs') },
   ];
 
   return (
     <>
-      <Helmet><title>Admin Dashboard · CloudCampus</title></Helmet>
+      <Helmet><title>{t('administratorLabel')} · CloudCampus</title></Helmet>
 
       <motion.div variants={stagger} initial="hidden" animate="visible" className="space-y-8 pb-6">
 
@@ -180,7 +172,7 @@ const AdminHome = () => {
             <h1 className="text-3xl md:text-4xl font-black tracking-tight">
               {userName.split(' ')[0]} <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-violet-500">👋</span>
             </h1>
-            <p className="text-muted-foreground text-sm">School administration overview & broadcast centre.</p>
+            <p className="text-muted-foreground text-sm">{t('adminHomeDesc')}</p>
           </div>
           <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-xs text-muted-foreground shrink-0 self-start sm:self-auto">
             <Calendar className="h-3.5 w-3.5 text-indigo-400" />
@@ -191,10 +183,10 @@ const AdminHome = () => {
         {/* ── 4 KPI cards ── */}
         <motion.div variants={stagger} className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: 'Students',       value: stats.totalStudents,  icon: Users,          from: '#6366f1', to: '#8b5cf6', sub: 'Enrolled' },
-            { label: 'Teachers',       value: stats.totalTeachers,  icon: GraduationCap,  from: '#8b5cf6', to: '#a855f7', sub: 'Active staff' },
-            { label: 'Classes',        value: stats.totalClasses,   icon: BookOpen,       from: '#06b6d4', to: '#3b82f6', sub: 'This school' },
-            { label: 'Discipline Cases', value: stats.disciplineCases, icon: AlertCircle, from: '#f97316', to: '#ef4444', sub: 'Recorded' },
+            { label: t('kpiStudents'),   value: stats.totalStudents,   icon: Users,         from: '#6366f1', to: '#8b5cf6', sub: t('kpiEnrolled') },
+            { label: t('kpiTeachers'),   value: stats.totalTeachers,   icon: GraduationCap, from: '#8b5cf6', to: '#a855f7', sub: t('kpiActiveStaff') },
+            { label: t('kpiClasses'),    value: stats.totalClasses,    icon: BookOpen,      from: '#06b6d4', to: '#3b82f6', sub: t('kpiThisSchool') },
+            { label: t('kpiDiscipline'), value: stats.disciplineCases, icon: AlertCircle,   from: '#f97316', to: '#ef4444', sub: t('kpiRecorded') },
           ].map(({ label, value, icon: Icon, from, to, sub }, i) => (
             <motion.div key={label} variants={fadeUp}>
               {loading ? <Skel className="h-28" /> : (
@@ -225,34 +217,34 @@ const AdminHome = () => {
             <div className="glass rounded-2xl p-6 border border-white/8">
               <div className="flex items-center gap-2 mb-5">
                 <TrendingUp className="h-5 w-5 text-indigo-400" />
-                <h3 className="font-black text-lg">School Distribution</h3>
+                <h3 className="font-black text-lg">{t('schoolDistribution')}</h3>
               </div>
               {loading ? (
                 <div className="space-y-4">{[1,2,3,4].map(i => <Skel key={i} className="h-8" />)}</div>
               ) : (
                 <div className="space-y-4">
-                  <StatBar label="Students" value={stats.totalStudents} max={stats.totalStudents} color="#6366f1" delay={0} />
-                  <StatBar label="Teachers"  value={stats.totalTeachers} max={stats.totalStudents} color="#8b5cf6" delay={0.1} />
-                  <StatBar label="Classes"   value={stats.totalClasses}  max={stats.totalStudents} color="#06b6d4" delay={0.2} />
-                  <StatBar label="Discipline Cases" value={stats.disciplineCases} max={Math.max(stats.totalStudents / 10, 1)} color="#f97316" delay={0.3} />
+                  <StatBar label={t('kpiStudents')}   value={stats.totalStudents}   max={stats.totalStudents} color="#6366f1" delay={0} />
+                  <StatBar label={t('kpiTeachers')}   value={stats.totalTeachers}   max={stats.totalStudents} color="#8b5cf6" delay={0.1} />
+                  <StatBar label={t('kpiClasses')}    value={stats.totalClasses}    max={stats.totalStudents} color="#06b6d4" delay={0.2} />
+                  <StatBar label={t('kpiDiscipline')} value={stats.disciplineCases} max={Math.max(stats.totalStudents / 10, 1)} color="#f97316" delay={0.3} />
                 </div>
               )}
             </div>
 
             {/* Ratio donuts */}
             <div className="glass rounded-2xl p-6 border border-white/8">
-              <h3 className="font-black text-lg mb-5">Key Ratios</h3>
+              <h3 className="font-black text-lg mb-5">{t('keyRatios')}</h3>
               {loading ? <Skel className="h-28" /> : (
                 <div className="grid grid-cols-3 gap-4 justify-items-center">
                   <DonutRing
                     pct={stats.totalTeachers > 0 ? Math.min(100, Math.round((stats.totalTeachers / Math.max(stats.totalStudents / 20, 1)) * 100)) : 0}
-                    color="#8b5cf6" label="Teacher Ratio" value={stats.totalTeachers} />
+                    color="#8b5cf6" label={t('teacherRatio')} value={stats.totalTeachers} />
                   <DonutRing
                     pct={stats.totalClasses > 0 ? Math.min(100, Math.round((stats.totalClasses / Math.max(stats.totalStudents / 30, 1)) * 100)) : 0}
-                    color="#06b6d4" label="Class Coverage" value={stats.totalClasses} />
+                    color="#06b6d4" label={t('classCoverage')} value={stats.totalClasses} />
                   <DonutRing
                     pct={stats.totalStudents > 0 ? Math.min(100, Math.round((1 - stats.disciplineCases / stats.totalStudents) * 100)) : 100}
-                    color="#22c55e" label="Good Conduct" value={`${stats.totalStudents > 0 ? Math.round((1 - stats.disciplineCases / stats.totalStudents) * 100) : 100}%`} />
+                    color="#22c55e" label={t('goodConduct')} value={`${stats.totalStudents > 0 ? Math.round((1 - stats.disciplineCases / stats.totalStudents) * 100) : 100}%`} />
                 </div>
               )}
             </div>
@@ -271,8 +263,8 @@ const AdminHome = () => {
                       <Bell className="h-4.5 w-4.5 text-indigo-400" />
                     </div>
                     <div>
-                      <h3 className="font-black">Broadcast Centre</h3>
-                      <p className="text-xs text-muted-foreground">{notifications.length} total</p>
+                      <h3 className="font-black">{t('broadcastCentre')}</h3>
+                      <p className="text-xs text-muted-foreground">{notifications.length} {t('broadcastTotal')}</p>
                     </div>
                   </div>
                   <button onClick={() => { setShowForm(v => !v); setShowBroadcasts(false); }}
@@ -281,19 +273,19 @@ const AdminHome = () => {
                         ? 'bg-white/8 border-white/15 text-muted-foreground'
                         : 'bg-indigo-500/15 border-indigo-500/35 text-indigo-300 hover:bg-indigo-500/20')}>
                     {showForm ? <X className="h-3.5 w-3.5" /> : <Radio className="h-3.5 w-3.5" />}
-                    {showForm ? 'Cancel' : 'Broadcast'}
+                    {showForm ? t('cancel') : t('broadcast')}
                   </button>
                 </div>
               </div>
 
-              {/* Compose form — only when toggled */}
+              {/* Compose form */}
               <AnimatePresence>
                 {showForm && (
                   <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.25 }}>
                     <form onSubmit={handlePost} className="p-5 border-b border-white/8 space-y-3">
                       <div className="space-y-1.5">
-                        <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Target</Label>
+                        <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('targetLabel')}</Label>
                         <Select value={newNotif.target_type} onValueChange={v => setNewNotif({ ...newNotif, target_type: v })}>
                           <SelectTrigger className="h-10 bg-white/5 border-white/10 rounded-xl text-sm focus:border-indigo-500/50">
                             <SelectValue />
@@ -304,14 +296,14 @@ const AdminHome = () => {
                         </Select>
                       </div>
                       <div className="space-y-1.5">
-                        <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Title</Label>
+                        <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('vpNotifyTitleLabel')}</Label>
                         <Input placeholder="e.g. Emergency Staff Meeting"
                           className="h-10 bg-white/5 border-white/10 rounded-xl focus:border-indigo-500/50"
                           value={newNotif.title} onChange={e => setNewNotif({ ...newNotif, title: e.target.value })} required />
                       </div>
                       <div className="space-y-1.5">
-                        <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Message</Label>
-                        <Textarea placeholder="Type your notification here…"
+                        <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('notifMessage')}</Label>
+                        <Textarea placeholder={t('vpNotifyContentPlaceholder')}
                           className="min-h-[80px] bg-white/5 border-white/10 rounded-xl focus:border-indigo-500/50 text-sm resize-none"
                           value={newNotif.content} onChange={e => setNewNotif({ ...newNotif, content: e.target.value })} required />
                       </div>
@@ -319,7 +311,7 @@ const AdminHome = () => {
                         className="w-full py-3 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-60"
                         style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', boxShadow: '0 6px 24px rgba(99,102,241,0.35)' }}>
                         {notifLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                        Publish Notification
+                        {t('publishNotif')}
                       </button>
                     </form>
                   </motion.div>
@@ -330,7 +322,7 @@ const AdminHome = () => {
               <div className="p-4 border-b border-white/6">
                 <button onClick={() => { setShowBroadcasts(v => !v); setShowForm(false); }}
                   className="w-full flex items-center justify-between text-sm font-bold text-muted-foreground hover:text-foreground transition-colors">
-                  <span>Recent Broadcasts ({notifications.length})</span>
+                  <span>{t('recentBroadcasts')} ({notifications.length})</span>
                   {showBroadcasts ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                 </button>
               </div>
@@ -343,7 +335,7 @@ const AdminHome = () => {
                     {notifications.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-10 gap-3 text-muted-foreground">
                         <Bell className="h-8 w-8 opacity-15" />
-                        <p className="text-sm">No broadcasts yet.</p>
+                        <p className="text-sm">{t('noBroadcasts')}</p>
                       </div>
                     ) : (
                       <div className="space-y-1 p-3">
@@ -381,8 +373,8 @@ const AdminHome = () => {
                     <Bell className="h-8 w-8 text-indigo-400/50" />
                   </div>
                   <div>
-                    <p className="font-bold text-sm">Broadcast Centre</p>
-                    <p className="text-xs text-muted-foreground mt-1">Click Broadcast to compose a message,<br />or View Broadcasts to see sent messages.</p>
+                    <p className="font-bold text-sm">{t('broadcastCentre')}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t('broadcastHint')}</p>
                   </div>
                 </div>
               )}

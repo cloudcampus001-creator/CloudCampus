@@ -26,14 +26,14 @@ const AdminDashboard = () => {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
   const [profileOpen, setProfileOpen] = React.useState(false);
   useDeviceNotifications();
-  const userName = localStorage.getItem('userName') || 'Administrator';
+  const userName = localStorage.getItem('userName') || t('administratorLabel');
   const navItems = [
-    { icon: Home, label: t('overview'), path: '/dashboard/administrator', shortLabel: 'Home' },
-    { icon: Users, label: t('users'), path: '/dashboard/administrator/users', shortLabel: 'Users' },
-    { icon: School, label: 'Classes', path: '/dashboard/administrator/classes', shortLabel: 'Classes' },
-    { icon: BookMarked, label: 'Subjects', path: '/dashboard/administrator/subjects', shortLabel: 'Subjects' },
-    { icon: CalendarClock, label: t('timetables'), path: '/dashboard/administrator/timetables', shortLabel: 'Time' },
-    { icon: MessageSquare, label: t('systemChat'), path: '/dashboard/administrator/chat', shortLabel: 'Chat' },
+    { icon: Home,         label: t('overview'),    path: '/dashboard/administrator',            shortLabel: t('adminShortHome') },
+    { icon: Users,        label: t('users'),        path: '/dashboard/administrator/users',      shortLabel: t('adminShortUsers') },
+    { icon: School,       label: t('adminClasses'), path: '/dashboard/administrator/classes',    shortLabel: t('adminShortClasses') },
+    { icon: BookMarked,   label: t('adminSubjects'),path: '/dashboard/administrator/subjects',   shortLabel: t('adminShortSubjects') },
+    { icon: CalendarClock,label: t('timetables'),   path: '/dashboard/administrator/timetables', shortLabel: t('adminShortTime') },
+    { icon: MessageSquare,label: t('systemChat'),   path: '/dashboard/administrator/chat',       shortLabel: t('adminShortChat') },
   ];
   const handleSignOut = async () => { await signOut(); localStorage.clear(); navigate('/'); };
   const isActive = (p) => p === '/dashboard/administrator' ? location.pathname === p : location.pathname.startsWith(p);
@@ -67,7 +67,7 @@ const AdminDashboard = () => {
             {isSidebarOpen ? (
               <button onClick={() => setProfileOpen(true)} className={`ml-auto flex items-center gap-2.5 ring-1 ${ACCENT.ring} rounded-xl px-2.5 py-1.5 hover:bg-white/5 transition-all active:scale-95`}>
                 <div className={`h-7 w-7 rounded-full bg-gradient-to-tr ${ACCENT.from} ${ACCENT.to} flex items-center justify-center text-white text-xs font-bold shrink-0`}>{getInitials(userName)}</div>
-                <div className="text-sm overflow-hidden text-left"><p className="font-semibold leading-none truncate max-w-[90px]">{userName}</p><p className="text-[10px] text-muted-foreground mt-0.5">Administrator</p></div>
+                <div className="text-sm overflow-hidden text-left"><p className="font-semibold leading-none truncate max-w-[90px]">{userName}</p><p className="text-[10px] text-muted-foreground mt-0.5">{t('administratorLabel')}</p></div>
               </button>
             ) : (
               <button onClick={() => setProfileOpen(true)} className={`h-9 w-9 rounded-full bg-gradient-to-tr ${ACCENT.from} ${ACCENT.to} flex items-center justify-center text-white text-xs font-bold hover:opacity-80 transition-opacity active:scale-95`}>{getInitials(userName)}</button>
@@ -106,7 +106,7 @@ const AdminDashboard = () => {
         </div>
       </nav>
 
-      <ProfileSheet open={profileOpen} onClose={() => setProfileOpen(false)} userName={userName} roleLabel="Administrator" accentFrom={ACCENT.from} accentTo={ACCENT.to} onSignOut={handleSignOut} />
+      <ProfileSheet open={profileOpen} onClose={() => setProfileOpen(false)} userName={userName} roleLabel={t('administratorLabel')} accentFrom={ACCENT.from} accentTo={ACCENT.to} onSignOut={handleSignOut} />
     </div>
   );
 };

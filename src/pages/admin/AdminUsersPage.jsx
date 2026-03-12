@@ -1,13 +1,5 @@
 /**
  * AdminUsersPage.jsx
- * ─────────────────────
- * Changes vs original:
- *  ✓ Parents tab REMOVED (parents login using student info)
- *  ✓ Teachers: subjects selector uses school_subjects catalogue (checkboxes, not free text)
- *  ✓ Teachers: classes_teaching uses multi-select dropdown from actual classes
- *  ✓ VP/DM: classes_managing uses multi-select dropdown from actual classes
- *  ✓ Full indigo/violet glass redesign
- *  ✓ Supabase logic preserved
  */
 import React, { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet';
@@ -27,15 +19,7 @@ import { cn } from '@/lib/utils';
 const stagger = { hidden: {}, visible: { transition: { staggerChildren: 0.05 } } };
 const fadeUp  = { hidden: { opacity: 0, y: 12 }, visible: { opacity: 1, y: 0, transition: { duration: 0.28 } } };
 
-const TABS = [
-  { key: 'students',   label: 'Students',   icon: Users,         table: 'students' },
-  { key: 'teachers',   label: 'Teachers',   icon: GraduationCap, table: 'teachers' },
-  { key: 'discipline', label: 'Discipline', icon: Shield,        table: 'discipline_masters' },
-  { key: 'vp',         label: 'Vice Principals', icon: UserCheck, table: 'vice_principals' },
-  { key: 'admin',      label: 'Admins',     icon: BookOpen,      table: 'administrators' },
-];
-
-const MultiCheckbox = ({ label, items, selected, onChange, placeholder }) => {
+const MultiCheckbox = ({ items, selected, onChange, placeholder }) => {
   const [open, setOpen] = useState(false);
   const selectedArr = Array.isArray(selected) ? selected : [];
   return (
@@ -51,7 +35,7 @@ const MultiCheckbox = ({ label, items, selected, onChange, placeholder }) => {
         {open && (
           <motion.div initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.97 }}
             className="absolute top-full mt-1.5 left-0 right-0 z-50 max-h-48 overflow-y-auto rounded-2xl border border-white/15 bg-zinc-900/95 backdrop-blur-xl shadow-xl p-2 space-y-0.5">
-            {items.length === 0 && <p className="text-xs text-muted-foreground p-2">No items available</p>}
+            {items.length === 0 && <p className="text-xs text-muted-foreground p-2">{placeholder}</p>}
             {items.map(item => {
               const checked = selectedArr.includes(item.value);
               return (
@@ -83,6 +67,14 @@ const AdminUsersPage = () => {
   const { t }       = useLanguage();
   const schoolId    = localStorage.getItem('schoolId');
 
+  const TABS = [
+    { key: 'students',   label: t('tabStudents'),  icon: Users,         table: 'students' },
+    { key: 'teachers',   label: t('tabTeachers'),  icon: GraduationCap, table: 'teachers' },
+    { key: 'discipline', label: t('tabDiscipline'),icon: Shield,        table: 'discipline_masters' },
+    { key: 'vp',         label: t('tabVP'),         icon: UserCheck,     table: 'vice_principals' },
+    { key: 'admin',      label: t('tabAdmins'),     icon: BookOpen,      table: 'administrators' },
+  ];
+
   const [activeTab,      setActiveTab]      = useState('students');
   const [users,          setUsers]          = useState([]);
   const [loading,        setLoading]        = useState(false);
@@ -98,7 +90,6 @@ const AdminUsersPage = () => {
   const [formLoading,    setFormLoading]    = useState(false);
   const [deleteTarget,   setDeleteTarget]   = useState(null);
 
-  // Form-specific arrays stored as real arrays, not strings
   const [selectedSubjects,  setSelectedSubjects]  = useState([]);
   const [selectedClassIds,  setSelectedClassIds]  = useState([]);
 
@@ -107,7 +98,6 @@ const AdminUsersPage = () => {
   useEffect(() => { fetchUsers(); }, [activeTab, schoolId]);
 
   useEffect(() => {
-    // Load reference data for forms
     const load = async () => {
       if (!schoolId) return;
       const [{ data: subs }, { data: cls }] = await Promise.all([
@@ -129,7 +119,7 @@ const AdminUsersPage = () => {
       if (error) throw error;
       setUsers(data || []);
     } catch {
-      toast({ variant: 'destructive', title: 'Error', description: 'Failed to load users.' });
+      toast({ variant: 'destructive', title: t('error'), description: t('failedToLoadUsers') });
     } finally { setLoading(false); }
   };
 
@@ -159,7 +149,6 @@ const AdminUsersPage = () => {
       const table = getTable(activeTab);
       const dataToSave = { ...formData, school_id: parseInt(schoolId) };
 
-      // Apply multi-select arrays
       if (activeTab === 'teachers') {
         dataToSave.subjects = selectedSubjects;
         dataToSave.classes_teaching = selectedClassIds.map(id => parseInt(id));
@@ -168,7 +157,6 @@ const AdminUsersPage = () => {
         dataToSave.classes_managing = selectedClassIds.map(id => parseInt(id));
       }
 
-      // Auto-generate matricule for new students
       if (activeTab === 'students' && !editingUser && !dataToSave.matricule) {
         dataToSave.matricule = `STU${Math.floor(Math.random() * 90000) + 10000}`;
       }
@@ -183,11 +171,11 @@ const AdminUsersPage = () => {
       }
 
       if (error) throw error;
-      toast({ title: editingUser ? 'User Updated' : 'User Created', className: 'bg-green-500/10 border-green-500/50 text-green-400' });
+      toast({ title: editingUser ? t('userUpdated') : t('userCreated'), className: 'bg-green-500/10 border-green-500/50 text-green-400' });
       setSheetOpen(false);
       fetchUsers();
     } catch (err) {
-      toast({ variant: 'destructive', title: 'Save Failed', description: err.message });
+      toast({ variant: 'destructive', title: t('saveFailed'), description: err.message });
     } finally { setFormLoading(false); }
   };
 
@@ -197,9 +185,9 @@ const AdminUsersPage = () => {
     const { error } = await supabase.from(getTable(activeTab)).delete().eq(idCol, deleteTarget);
     if (!error) {
       setUsers(prev => prev.filter(u => u[idCol] !== deleteTarget));
-      toast({ title: 'User Deleted' });
+      toast({ title: t('userDeleted') });
     } else {
-      toast({ variant: 'destructive', title: 'Delete Failed', description: error.message });
+      toast({ variant: 'destructive', title: t('deleteFailed'), description: error.message });
     }
     setDeleteTarget(null);
   };
@@ -211,11 +199,11 @@ const AdminUsersPage = () => {
     switch (activeTab) {
       case 'students': return (
         <>
-          <Field label="Full Name"><Input value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} required /></Field>
-          <Field label="Matricule (ID)" hint="Auto-generated if empty"><Input value={formData.matricule || ''} onChange={e => setFormData({ ...formData, matricule: e.target.value })} disabled={!!editingUser} placeholder="Auto-generated" /></Field>
-          <Field label="Class" hint="Select the class for this student">
+          <Field label={t('fullNameLabel')}><Input value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} required /></Field>
+          <Field label={t('matriculeIdLabel')} hint={t('autoGeneratedHint')}><Input value={formData.matricule || ''} onChange={e => setFormData({ ...formData, matricule: e.target.value })} disabled={!!editingUser} placeholder={t('autoGeneratedPlaceholder')} /></Field>
+          <Field label={t('classLabel')} hint={t('classForStudent')}>
             <Select value={formData.class_id?.toString() || ''} onValueChange={v => setFormData({ ...formData, class_id: parseInt(v) })}>
-              <SelectTrigger className="h-11 bg-white/5 border-white/10 rounded-xl"><SelectValue placeholder="Select class…" /></SelectTrigger>
+              <SelectTrigger className="h-11 bg-white/5 border-white/10 rounded-xl"><SelectValue placeholder={t('selectClassToManage')} /></SelectTrigger>
               <SelectContent>{allClasses.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}</SelectContent>
             </Select>
           </Field>
@@ -223,36 +211,36 @@ const AdminUsersPage = () => {
       );
       case 'teachers': return (
         <>
-          <Field label="Teacher ID" hint="Numeric ID (primary key)"><Input type="number" value={formData.id || ''} onChange={e => setFormData({ ...formData, id: parseInt(e.target.value) })} required disabled={!!editingUser} /></Field>
-          <Field label="Full Name"><Input value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} required /></Field>
-          <Field label="Subjects" hint="Select from school catalogue">
-            <MultiCheckbox items={subjectItems} selected={selectedSubjects} onChange={setSelectedSubjects} placeholder="Select subjects…" />
-            {schoolSubjects.length === 0 && <p className="text-xs text-amber-400 mt-1">Add subjects in Subjects & Library first.</p>}
+          <Field label={t('teacherIdLabel')} hint={t('numericIdHint')}><Input type="number" value={formData.id || ''} onChange={e => setFormData({ ...formData, id: parseInt(e.target.value) })} required disabled={!!editingUser} /></Field>
+          <Field label={t('fullNameLabel')}><Input value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} required /></Field>
+          <Field label={t('subjectsLabel')} hint={t('subjectsFromCatalogue')}>
+            <MultiCheckbox items={subjectItems} selected={selectedSubjects} onChange={setSelectedSubjects} placeholder={t('selectSubjectsPlaceholder')} />
+            {schoolSubjects.length === 0 && <p className="text-xs text-amber-400 mt-1">{t('addSubjectsFirst')}</p>}
           </Field>
-          <Field label="Classes Teaching" hint="Select classes this teacher covers">
-            <MultiCheckbox items={classItems} selected={selectedClassIds} onChange={setSelectedClassIds} placeholder="Select classes…" />
+          <Field label={t('classesTaughtLabel')} hint={t('selectClassesCoverHint')}>
+            <MultiCheckbox items={classItems} selected={selectedClassIds} onChange={setSelectedClassIds} placeholder={t('selectClassesPlaceholder')} />
           </Field>
         </>
       );
       case 'vp': return (
         <>
-          <Field label="VP ID"><Input type="number" value={formData.id || ''} onChange={e => setFormData({ ...formData, id: parseInt(e.target.value) })} required disabled={!!editingUser} /></Field>
-          <Field label="Full Name"><Input value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} required /></Field>
-          <Field label="Managing Classes" hint="Classes under this VP's supervision">
-            <MultiCheckbox items={classItems} selected={selectedClassIds} onChange={setSelectedClassIds} placeholder="Select classes…" />
+          <Field label={t('vpIdLabel')}><Input type="number" value={formData.id || ''} onChange={e => setFormData({ ...formData, id: parseInt(e.target.value) })} required disabled={!!editingUser} /></Field>
+          <Field label={t('fullNameLabel')}><Input value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} required /></Field>
+          <Field label={t('managingClassesLabel')} hint={t('vpSupervisionHint')}>
+            <MultiCheckbox items={classItems} selected={selectedClassIds} onChange={setSelectedClassIds} placeholder={t('selectClassesPlaceholder')} />
           </Field>
         </>
       );
       case 'discipline': return (
         <>
-          <Field label="DM ID"><Input type="number" value={formData.id || ''} onChange={e => setFormData({ ...formData, id: parseInt(e.target.value) })} required disabled={!!editingUser} /></Field>
-          <Field label="Full Name"><Input value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} required /></Field>
+          <Field label={t('dmIdLabel')}><Input type="number" value={formData.id || ''} onChange={e => setFormData({ ...formData, id: parseInt(e.target.value) })} required disabled={!!editingUser} /></Field>
+          <Field label={t('fullNameLabel')}><Input value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} required /></Field>
         </>
       );
       case 'admin': return (
         <>
-          <Field label="Full Name"><Input value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} required /></Field>
-          <Field label="Password" hint="Set or update admin password"><Input type="password" value={formData.password_hash || ''} onChange={e => setFormData({ ...formData, password_hash: e.target.value })} placeholder="Leave blank to keep current" /></Field>
+          <Field label={t('fullNameLabel')}><Input value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} required /></Field>
+          <Field label={t('adminPasswordLabel')} hint={t('setUpdatePassword')}><Input type="password" value={formData.password_hash || ''} onChange={e => setFormData({ ...formData, password_hash: e.target.value })} placeholder={t('leaveBlankPassword')} /></Field>
         </>
       );
       default: return null;
@@ -260,28 +248,30 @@ const AdminUsersPage = () => {
   };
 
   const getUserSub = (u) => {
-    if (activeTab === 'students') return `Matricule: ${u.matricule || '—'} · Class: ${u.class_id || '?'}`;
-    if (activeTab === 'teachers') return `Subjects: ${Array.isArray(u.subjects) ? u.subjects.slice(0,2).join(', ') : '—'}`;
-    if (activeTab === 'vp') return `Classes: ${Array.isArray(u.classes_managing) ? u.classes_managing.length : 0}`;
-    return `ID: ${u.id}`;
+    if (activeTab === 'students') return `${t('matriculePrefix')} ${u.matricule || '—'} · ${t('classIdPrefix')} ${u.class_id || '?'}`;
+    if (activeTab === 'teachers') return `${t('subjectsPrefix')} ${Array.isArray(u.subjects) ? u.subjects.slice(0,2).join(', ') : '—'}`;
+    if (activeTab === 'vp') return `${t('classesPrefix')} ${Array.isArray(u.classes_managing) ? u.classes_managing.length : 0}`;
+    return `${t('idPrefix')} ${u.id}`;
   };
+
+  const currentTab = TABS.find(tab => tab.key === activeTab);
 
   return (
     <>
-      <Helmet><title>User Management · Admin</title></Helmet>
+      <Helmet><title>{t('userManagementTitle')} · Admin</title></Helmet>
       <div className="space-y-7 pb-6">
 
         {/* Header */}
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
           className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-black tracking-tight">User Management</h1>
-            <p className="text-muted-foreground text-sm mt-0.5">Create and manage all school stakeholder accounts.</p>
+            <h1 className="text-3xl font-black tracking-tight">{t('userManagementTitle')}</h1>
+            <p className="text-muted-foreground text-sm mt-0.5">{t('userManagementDesc')}</p>
           </div>
           <button onClick={() => openSheet()}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm text-white self-start sm:self-auto"
             style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', boxShadow: '0 6px 20px rgba(99,102,241,0.3)' }}>
-            <Plus className="h-4 w-4" /> Add {TABS.find(t => t.key === activeTab)?.label.slice(0,-1) || 'User'}
+            <Plus className="h-4 w-4" /> {t('add')} {currentTab?.label.slice(0,-1) || t('new')}
           </button>
         </motion.div>
 
@@ -304,7 +294,7 @@ const AdminUsersPage = () => {
         {/* Search */}
         <div className="relative">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <Input placeholder={`Search ${TABS.find(t => t.key === activeTab)?.label.toLowerCase()}…`}
+          <Input placeholder={`${t('search')} ${currentTab?.label.toLowerCase()}…`}
             className="pl-10 h-11 bg-white/5 border-white/10 rounded-xl"
             value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
         </div>
@@ -315,7 +305,7 @@ const AdminUsersPage = () => {
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 glass rounded-2xl border border-white/8 gap-3 text-muted-foreground">
             <Users className="h-12 w-12 opacity-15" />
-            <p>No {TABS.find(t => t.key === activeTab)?.label.toLowerCase()} found.</p>
+            <p>{t('noItemsAvailable')}</p>
           </div>
         ) : (
           <motion.div variants={stagger} initial="hidden" animate="visible" className="space-y-2">
@@ -360,18 +350,20 @@ const AdminUsersPage = () => {
                 <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-3xl"
                   style={{ background: 'linear-gradient(90deg,#6366f1,#8b5cf6)' }} />
                 <div className="flex justify-center mb-4"><div className="h-1 w-10 bg-white/20 rounded-full" /></div>
-                <h2 className="text-xl font-black mb-5">{editingUser ? 'Edit User' : `New ${TABS.find(t => t.key === activeTab)?.label.slice(0,-1)}`}</h2>
+                <h2 className="text-xl font-black mb-5">
+                  {editingUser ? t('editUser') : `${t('new')} ${currentTab?.label.slice(0,-1) || ''}`}
+                </h2>
                 <form onSubmit={handleSave} className="space-y-4">
                   {renderFormFields()}
                   <div className="grid grid-cols-2 gap-3 pt-2">
                     <button type="button" onClick={() => setSheetOpen(false)}
                       className="py-3.5 rounded-2xl font-bold text-sm border border-white/15 bg-white/5 hover:bg-white/10 transition-all">
-                      Cancel
+                      {t('cancel')}
                     </button>
                     <button type="submit" disabled={formLoading}
                       className="py-3.5 rounded-2xl font-bold text-sm text-white flex items-center justify-center gap-2 active:scale-[0.97] disabled:opacity-60"
                       style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', boxShadow: '0 6px 20px rgba(99,102,241,0.3)' }}>
-                      {formLoading && <Loader2 className="h-4 w-4 animate-spin" />} Save
+                      {formLoading && <Loader2 className="h-4 w-4 animate-spin" />} {t('save')}
                     </button>
                   </div>
                 </form>
@@ -391,14 +383,14 @@ const AdminUsersPage = () => {
             <motion.div initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.92 }}
               className="fixed inset-0 z-50 flex items-center justify-center p-4">
               <div className="glass rounded-3xl p-7 border border-white/15 max-w-sm w-full">
-                <h2 className="text-xl font-black mb-2">Delete User?</h2>
-                <p className="text-sm text-muted-foreground mb-6">This action cannot be undone.</p>
+                <h2 className="text-xl font-black mb-2">{t('deleteUserTitle')}</h2>
+                <p className="text-sm text-muted-foreground mb-6">{t('deleteUserDesc')}</p>
                 <div className="grid grid-cols-2 gap-3">
                   <button onClick={() => setDeleteTarget(null)}
-                    className="py-3.5 rounded-2xl font-bold text-sm border border-white/15 bg-white/5 hover:bg-white/10 transition-all">Cancel</button>
+                    className="py-3.5 rounded-2xl font-bold text-sm border border-white/15 bg-white/5 hover:bg-white/10 transition-all">{t('cancel')}</button>
                   <button onClick={confirmDelete}
                     className="py-3.5 rounded-2xl font-bold text-sm text-white"
-                    style={{ background: 'linear-gradient(135deg,#ef4444,#dc2626)', boxShadow: '0 6px 20px rgba(239,68,68,0.3)' }}>Delete</button>
+                    style={{ background: 'linear-gradient(135deg,#ef4444,#dc2626)', boxShadow: '0 6px 20px rgba(239,68,68,0.3)' }}>{t('delete')}</button>
                 </div>
               </div>
             </motion.div>
