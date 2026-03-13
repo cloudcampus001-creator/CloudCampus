@@ -2,13 +2,9 @@
  * useDeviceNotifications.js
  * src/hooks/useDeviceNotifications.js
  *
- * Simplified approach — uses OneSignal TAGS instead of player IDs.
- *
- * How it works:
- *  - On login, we tag the device: { school_id, role, user_id, class_id, ... }
- *  - The edge function uses these tags as filters to find the right devices
- *  - No device_tokens table needed, no player ID capture, no timing issues
- *  - OneSignal handles everything — tags survive reinstalls and ID rotation
+ * Fix: sendTags was being called BEFORE register() completed.
+ * OneSignal silently drops tags for unsubscribed devices.
+ * Now: register first → wait for subscription confirmed → then sendTags.
  */
 
 import { useEffect, useRef } from 'react';
@@ -36,41 +32,82 @@ function isRelevant(notif, { role, userId, classId, studentMatricule }) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DETECT MEDIAN.CO
-// ─────────────────────────────────────────────────────────────────────────────
 function isMedianApp() {
   return typeof window !== 'undefined' && !!window.gonative;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TAG THE DEVICE
-// Sets OneSignal tags so the edge function can find this device by filter.
-// Called on every login — safe to call multiple times, tags just overwrite.
+// WAIT UNTIL SUBSCRIBED
+// Polls onesignalInfo every 2s until isSubscribed = true, then resolves.
+// Gives up after 30s (user may have denied, or very slow device).
 // ─────────────────────────────────────────────────────────────────────────────
-function tagDevice({ schoolId, role, userId, classId, studentMatricule }) {
+function waitUntilSubscribed(maxWaitMs = 30000) {
+  return new Promise((resolve) => {
+    const deadline = Date.now() + maxWaitMs;
+
+    function check() {
+      if (!window.gonative?.onesignal?.onesignalInfo) {
+        resolve(false);
+        return;
+      }
+      window.gonative.onesignal.onesignalInfo({
+        callback: (info) => {
+          console.log('[DeviceNotif] onesignalInfo:', JSON.stringify(info));
+          if (info?.isSubscribed) {
+            resolve(true);
+          } else if (Date.now() < deadline) {
+            setTimeout(check, 2000); // retry in 2s
+          } else {
+            console.warn('[DeviceNotif] Gave up waiting for subscription');
+            resolve(false);
+          }
+        },
+      });
+    }
+
+    check();
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REGISTER THEN TAG
+// 1. Call register() — shows permission dialog on first run
+// 2. Poll until isSubscribed = true
+// 3. Call sendTags — OneSignal now accepts them
+// ─────────────────────────────────────────────────────────────────────────────
+async function registerAndTag({ schoolId, role, userId, classId, studentMatricule }) {
   if (!isMedianApp()) return;
 
+  // Step 1: trigger permission dialog / confirm subscription
+  if (window.gonative?.onesignal?.register) {
+    window.gonative.onesignal.register();
+  }
+
+  // Step 2: wait until the device is actually subscribed
+  const subscribed = await waitUntilSubscribed();
+
+  if (!subscribed) {
+    console.warn('[DeviceNotif] Device not subscribed — tags not sent');
+    return;
+  }
+
+  // Step 3: now safe to set tags
   const tags = {
-    school_id:         String(schoolId  || ''),
-    role:              String(role      || ''),
-    user_id:           String(userId    || ''),
-    class_id:          String(classId   || ''),
-    student_matricule: String(studentMatricule || ''),
-    // timestamp so you can see last-active in OneSignal dashboard
+    school_id:         String(schoolId          || ''),
+    role:              String(role              || ''),
+    user_id:           String(userId            || ''),
+    class_id:          String(classId           || ''),
+    student_matricule: String(studentMatricule  || ''),
     last_login:        new Date().toISOString().slice(0, 10),
   };
 
-  console.log('[DeviceNotif] Setting OneSignal tags:', tags);
+  console.log('[DeviceNotif] Sending tags:', JSON.stringify(tags));
 
-  // median.co bridge call — sets tags on this device in OneSignal
   if (window.gonative?.onesignal?.sendTags) {
     window.gonative.onesignal.sendTags({ tags });
-  }
-
-  // Also trigger permission dialog on new phones
-  if (window.gonative?.onesignal?.register) {
-    window.gonative.onesignal.register();
+    console.log('[DeviceNotif] Tags sent successfully');
+  } else {
+    console.warn('[DeviceNotif] sendTags not available on this bridge version');
   }
 }
 
@@ -112,12 +149,11 @@ export function useDeviceNotifications() {
     identityRef.current = { role, userId, classId, studentMatricule };
   }, [role, userId, classId, studentMatricule]);
 
-  // ── Tag the device on login ───────────────────────────────────────────────
+  // ── Register + tag on login ───────────────────────────────────────────────
   useEffect(() => {
     if (!userId || !schoolId) return;
-
     if (isMedianApp()) {
-      tagDevice({ schoolId, role, userId, classId, studentMatricule });
+      registerAndTag({ schoolId, role, userId, classId, studentMatricule });
     } else {
       getSwReg();
       if ('Notification' in window && Notification.permission === 'default') {
