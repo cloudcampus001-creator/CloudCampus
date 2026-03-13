@@ -341,7 +341,7 @@ const AdminUsersPage = () => {
         {sheetOpen && (
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50" onClick={() => setSheetOpen(false)} />
+              className="fixed inset-0 bg-white/4 backdrop-blur-sm z-50" onClick={() => setSheetOpen(false)} />
             <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
               transition={{ type: 'spring', stiffness: 320, damping: 32 }}
               className="fixed bottom-0 left-0 right-0 z-50 max-w-lg mx-auto">
