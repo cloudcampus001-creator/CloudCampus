@@ -1,16 +1,23 @@
 /**
  * AdminSchoolSettingsPage.jsx
  *
- * KEY FIX: `isConfigured` is explicit STATE set once inside the useEffect
- * after the DB fetch completes. It is NEVER re-derived from `school?.latitude`
- * on the fly — that caused the page to flash "not configured" on every refresh
- * because school=null during the loading phase made the derived value false.
+ * ROOT CAUSE FIX:
+ *  Supabase does NOT error when .update().eq() matches 0 rows — it just
+ *  returns null data silently. Previous code set state from form values
+ *  after save, so the UI showed "configured" even though nothing was
+ *  written to the DB. On refresh the fetch returned null coordinates and
+ *  went back to "not configured".
+ *
+ *  Fix: the update now uses .select().single() — if 0 rows matched,
+ *  Supabase returns an error ("JSON object requested, multiple (or no)
+ *  rows returned"), which we catch and surface. State is always set from
+ *  the actual row returned by Supabase, never from form values.
  *
  * Two display modes:
- *  CONFIGURED  — DB has lat/lng → show read-only card (persists across refreshes)
- *  EDIT        — no coords yet, OR admin clicked "Edit" → show form
+ *  CONFIGURED  — DB row has lat+lng → green card, persists across refreshes
+ *  EDIT        — no coords yet OR admin clicked Edit → form
  *
- * Required columns (run once in Supabase):
+ * SQL migration (run once in Supabase SQL editor):
  *   ALTER TABLE schools
  *     ADD COLUMN IF NOT EXISTS latitude          DOUBLE PRECISION,
  *     ADD COLUMN IF NOT EXISTS longitude         DOUBLE PRECISION,
@@ -31,14 +38,13 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import PageTransition from '@/components/PageTransition';
 import { cn } from '@/lib/utils';
 
-/* ── Configured read-only card ────────────────────────── */
-const ConfiguredCard = ({ school, onEdit, onClear }) => (
+/* ── Configured read-only card ───────────────────────── */
+const ConfiguredCard = ({ school, onEdit, onClear, clearing }) => (
   <motion.div
     initial={{ opacity: 0, scale: 0.97 }}
     animate={{ opacity: 1, scale: 1 }}
     className="glass rounded-2xl p-6 border border-emerald-500/30 bg-emerald-500/5 space-y-5"
   >
-    {/* Header */}
     <div className="flex items-start justify-between gap-3">
       <div className="flex items-center gap-3">
         <div className="h-12 w-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/25 flex items-center justify-center shrink-0">
@@ -61,7 +67,6 @@ const ConfiguredCard = ({ school, onEdit, onClear }) => (
       </button>
     </div>
 
-    {/* Coordinates */}
     <div className="grid grid-cols-2 gap-3">
       <div className="p-4 rounded-xl bg-white/4 border border-white/8">
         <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 mb-1">Latitude</p>
@@ -73,7 +78,6 @@ const ConfiguredCard = ({ school, onEdit, onClear }) => (
       </div>
     </div>
 
-    {/* Radius */}
     <div className="p-4 rounded-xl bg-white/4 border border-white/8 flex items-center justify-between gap-4">
       <div>
         <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 mb-1">Allowed radius</p>
@@ -95,7 +99,6 @@ const ConfiguredCard = ({ school, onEdit, onClear }) => (
       </div>
     </div>
 
-    {/* School name */}
     {school.name && (
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <MapPin className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
@@ -106,70 +109,85 @@ const ConfiguredCard = ({ school, onEdit, onClear }) => (
 
     <button
       onClick={onClear}
-      className="text-xs text-red-400/70 hover:text-red-400 transition-colors underline underline-offset-2"
+      disabled={clearing}
+      className="text-xs text-red-400/70 hover:text-red-400 transition-colors underline underline-offset-2 disabled:opacity-50"
     >
-      Disable geolocation for this school
+      {clearing ? 'Disabling…' : 'Disable geolocation for this school'}
     </button>
   </motion.div>
 );
 
-/* ══════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════ */
 const AdminSchoolSettingsPage = () => {
   const { toast } = useToast();
   const { t }     = useLanguage();
 
   const schoolId = localStorage.getItem('schoolId');
 
-  // loading covers the initial DB fetch — nothing is shown until it completes
   const [loading,      setLoading]      = useState(true);
   const [school,       setSchool]       = useState(null);
-
-  // ← THIS is the key: explicit state, set once after fetch, never re-derived
-  const [isConfigured, setIsConfigured] = useState(false);
+  const [isConfigured, setIsConfigured] = useState(false); // set from DB, never derived
   const [editMode,     setEditMode]     = useState(false);
+  const [saving,       setSaving]       = useState(false);
+  const [clearing,     setClearing]     = useState(false);
+  const [locating,     setLocating]     = useState(false);
 
-  const [saving,   setSaving]   = useState(false);
-  const [locating, setLocating] = useState(false);
-
-  // form fields
   const [lat,    setLat]    = useState('');
   const [lng,    setLng]    = useState('');
   const [radius, setRadius] = useState('300');
 
-  /* ── fetch on mount ──────────────────────────────────── */
+  /* ── parse schoolId safely ──────────────────────────── */
+  const parsedSchoolId = parseInt(schoolId, 10);
+
+  /* ── fetch on mount ─────────────────────────────────── */
   useEffect(() => {
-    if (!schoolId) { setLoading(false); return; }
+    if (!schoolId || isNaN(parsedSchoolId)) {
+      setLoading(false);
+      return;
+    }
 
     (async () => {
-      const { data, error } = await supabase
-        .from('schools')
-        .select('id, name, city, latitude, longitude, geo_radius_meters')
-        .eq('id', parseInt(schoolId))
-        .maybeSingle();
+      try {
+        const { data, error } = await supabase
+          .from('schools')
+          .select('id, name, city, latitude, longitude, geo_radius_meters')
+          .eq('id', parsedSchoolId)
+          .maybeSingle();
 
-      if (!error && data) {
+        if (error) {
+          // Columns may not exist yet — still open the form, but log the error
+          console.warn('School settings fetch error (columns may need migration):', error.message);
+          setIsConfigured(false);
+          setEditMode(true);
+          return;
+        }
+
+        if (!data) {
+          // No matching school row
+          console.warn('No school row found for id:', parsedSchoolId);
+          setIsConfigured(false);
+          setEditMode(true);
+          return;
+        }
+
+        // Row found — determine configured state from actual DB values
         setSchool(data);
-
-        // Determine once, set explicitly — this is the ground truth for this session
         const configured = data.latitude != null && data.longitude != null;
-        setIsConfigured(configured);
-        setEditMode(!configured);          // form open only when not yet configured
+        setIsConfigured(configured);  // ← ground truth from DB
+        setEditMode(!configured);
 
-        // Pre-fill form fields in case admin later clicks Edit
+        // Pre-fill form fields for if/when admin opens edit mode
         setLat(data.latitude  != null ? String(data.latitude)           : '');
         setLng(data.longitude != null ? String(data.longitude)          : '');
         setRadius(data.geo_radius_meters != null ? String(data.geo_radius_meters) : '300');
-      } else {
-        // Columns may not exist yet — open the form
-        setIsConfigured(false);
-        setEditMode(true);
+
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);   // ← render only after we know the real state
     })();
-  }, [schoolId]);
+  }, []);   // runs once on mount only — no dependency on schoolId to avoid re-runs
 
-  /* ── GPS shortcut ────────────────────────────────────── */
+  /* ── GPS shortcut ───────────────────────────────────── */
   const handleLocateMe = () => {
     if (!navigator.geolocation) {
       toast({ variant: 'destructive', title: 'GPS not available', description: 'Your browser does not support geolocation.' });
@@ -194,15 +212,15 @@ const AdminSchoolSettingsPage = () => {
     );
   };
 
-  /* ── save ─────────────────────────────────────────────── */
+  /* ── save ───────────────────────────────────────────── */
   const handleSave = async () => {
     const parsedLat    = parseFloat(lat);
     const parsedLng    = parseFloat(lng);
     const parsedRadius = parseInt(radius, 10);
 
-    if (lat && (isNaN(parsedLat)    || parsedLat < -90   || parsedLat > 90))   { toast({ variant: 'destructive', title: 'Invalid latitude',  description: 'Must be between -90 and 90.'   }); return; }
-    if (lng && (isNaN(parsedLng)    || parsedLng < -180  || parsedLng > 180))  { toast({ variant: 'destructive', title: 'Invalid longitude', description: 'Must be between -180 and 180.' }); return; }
-    if (isNaN(parsedRadius) || parsedRadius < 50)                               { toast({ variant: 'destructive', title: 'Invalid radius',    description: 'Minimum radius is 50 metres.'  }); return; }
+    if (lat && (isNaN(parsedLat) || parsedLat < -90  || parsedLat > 90))  { toast({ variant: 'destructive', title: 'Invalid latitude',  description: 'Must be between -90 and 90.'   }); return; }
+    if (lng && (isNaN(parsedLng) || parsedLng < -180 || parsedLng > 180)) { toast({ variant: 'destructive', title: 'Invalid longitude', description: 'Must be between -180 and 180.' }); return; }
+    if (isNaN(parsedRadius) || parsedRadius < 50)                          { toast({ variant: 'destructive', title: 'Invalid radius',    description: 'Minimum radius is 50 metres.'  }); return; }
 
     setSaving(true);
     try {
@@ -211,17 +229,30 @@ const AdminSchoolSettingsPage = () => {
         longitude:         lng ? parsedLng : null,
         geo_radius_meters: parsedRadius,
       };
-      const { error } = await supabase
-        .from('schools').update(payload).eq('id', parseInt(schoolId));
+
+      // ── KEY FIX: .select().single() makes Supabase error if 0 rows matched ──
+      // This means we only proceed if the row was actually updated in the DB.
+      // State is set from the DB-returned row, not from form values.
+      const { data: saved, error } = await supabase
+        .from('schools')
+        .update(payload)
+        .eq('id', parsedSchoolId)
+        .select('id, name, city, latitude, longitude, geo_radius_meters')
+        .single();
+
       if (error) throw error;
+      if (!saved) throw new Error('Update matched no rows — check the school ID.');
 
-      const updatedSchool = { ...school, ...payload };
-      setSchool(updatedSchool);
-
-      // Only show configured card if actual coordinates were saved
-      const nowConfigured = payload.latitude != null && payload.longitude != null;
+      // Set state from the actual DB response
+      setSchool(saved);
+      const nowConfigured = saved.latitude != null && saved.longitude != null;
       setIsConfigured(nowConfigured);
       setEditMode(!nowConfigured);
+
+      // Keep form fields in sync with what was saved
+      setLat(saved.latitude  != null ? String(saved.latitude)           : '');
+      setLng(saved.longitude != null ? String(saved.longitude)          : '');
+      setRadius(saved.geo_radius_meters != null ? String(saved.geo_radius_meters) : '300');
 
       toast({
         title: '✓ Settings saved',
@@ -231,62 +262,66 @@ const AdminSchoolSettingsPage = () => {
         className: 'bg-green-500/10 border-green-500/50 text-green-400',
       });
     } catch (err) {
-      toast({ variant: 'destructive', title: t('error'), description: err.message });
+      toast({ variant: 'destructive', title: 'Save failed', description: err.message });
     } finally {
       setSaving(false);
     }
   };
 
-  /* ── disable geo ──────────────────────────────────────── */
+  /* ── disable / clear geo ────────────────────────────── */
   const handleClear = async () => {
-    setSaving(true);
+    setClearing(true);
     try {
-      const { error } = await supabase
+      const { data: cleared, error } = await supabase
         .from('schools')
         .update({ latitude: null, longitude: null, geo_radius_meters: 300 })
-        .eq('id', parseInt(schoolId));
-      if (error) throw error;
+        .eq('id', parsedSchoolId)
+        .select('id, name, city, latitude, longitude, geo_radius_meters')
+        .single();
 
-      setSchool(prev => ({ ...prev, latitude: null, longitude: null, geo_radius_meters: 300 }));
-      setLat(''); setLng(''); setRadius('300');
+      if (error) throw error;
+      if (!cleared) throw new Error('Update matched no rows.');
+
+      setSchool(cleared);
       setIsConfigured(false);
       setEditMode(true);
+      setLat(''); setLng(''); setRadius('300');
 
       toast({ title: 'Geolocation disabled', description: 'Teachers can now sign from anywhere.' });
     } catch (err) {
-      toast({ variant: 'destructive', title: t('error'), description: err.message });
+      toast({ variant: 'destructive', title: 'Failed to disable', description: err.message });
     } finally {
-      setSaving(false);
+      setClearing(false);
     }
   };
 
-  /* ── cancel edit ──────────────────────────────────────── */
+  /* ── cancel edit ────────────────────────────────────── */
   const handleCancelEdit = () => {
+    // Restore form to last saved DB values
     setLat(school?.latitude  != null ? String(school.latitude)           : '');
     setLng(school?.longitude != null ? String(school.longitude)          : '');
     setRadius(school?.geo_radius_meters != null ? String(school.geo_radius_meters) : '300');
     setEditMode(false);
   };
 
-  /* ── render ───────────────────────────────────────────── */
+  /* ── render ─────────────────────────────────────────── */
   return (
     <>
       <Helmet><title>School Settings · Admin · CloudCampus</title></Helmet>
       <PageTransition>
         <div className="max-w-2xl mx-auto space-y-7 pb-6">
 
-          {/* Header */}
           <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
             <h1 className="text-3xl font-black tracking-tight">
               {t('schoolSettings') || 'School Settings'}
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
               {t('schoolSettingsDesc') ||
-                'Set the school\'s GPS coordinates so teachers can only sign logbooks from campus.'}
+                "Set the school's GPS coordinates so teachers can only sign logbooks from campus."}
             </p>
           </motion.div>
 
-          {/* Show skeletons until the fetch is done — nothing else renders until loading=false */}
+          {/* Skeletons until fetch is done — nothing else renders while loading=true */}
           {loading ? (
             <div className="space-y-4">
               {[0, 1, 2].map(i => (
@@ -296,7 +331,7 @@ const AdminSchoolSettingsPage = () => {
           ) : (
             <AnimatePresence mode="wait">
 
-              {/* ── CONFIGURED: DB has lat+lng and admin has not clicked Edit ── */}
+              {/* ── CONFIGURED MODE ─────────────────────── */}
               {isConfigured && !editMode && (
                 <motion.div key="configured"
                   initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -305,18 +340,19 @@ const AdminSchoolSettingsPage = () => {
                     school={school}
                     onEdit={() => setEditMode(true)}
                     onClear={handleClear}
+                    clearing={clearing}
                   />
                 </motion.div>
               )}
 
-              {/* ── EDIT / SETUP: no coords yet OR admin clicked Edit ── */}
+              {/* ── EDIT / SETUP MODE ───────────────────── */}
               {(!isConfigured || editMode) && (
                 <motion.div key="edit"
                   initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}
                   className="space-y-5">
 
-                  {/* Warning shown only when truly not configured (not when editing existing) */}
+                  {/* Warning only when truly not yet configured */}
                   {!isConfigured && (
                     <div className="flex items-start gap-3 p-4 rounded-2xl border border-amber-500/25 bg-amber-500/6">
                       <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
@@ -329,7 +365,6 @@ const AdminSchoolSettingsPage = () => {
                     </div>
                   )}
 
-                  {/* School info */}
                   {school?.name && (
                     <div className="px-4 py-3 rounded-xl bg-white/4 border border-white/8 flex items-center gap-3">
                       <MapPin className="h-4 w-4 text-indigo-400 shrink-0" />
@@ -340,7 +375,6 @@ const AdminSchoolSettingsPage = () => {
                     </div>
                   )}
 
-                  {/* Form */}
                   <div className="glass rounded-2xl p-6 space-y-5">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2.5">
@@ -393,7 +427,9 @@ const AdminSchoolSettingsPage = () => {
                         Leave fields blank to disable enforcement.
                         <span className="text-indigo-400 font-semibold mt-1 block">
                           Run once in Supabase:{' '}
-                          <code className="font-mono">ALTER TABLE schools ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION, ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION, ADD COLUMN IF NOT EXISTS geo_radius_meters INTEGER DEFAULT 300;</code>
+                          <code className="font-mono">
+                            ALTER TABLE schools ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION, ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION, ADD COLUMN IF NOT EXISTS geo_radius_meters INTEGER DEFAULT 300;
+                          </code>
                         </span>
                       </span>
                     </div>

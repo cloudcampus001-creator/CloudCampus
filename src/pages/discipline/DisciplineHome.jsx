@@ -1,11 +1,3 @@
-/**
- * DisciplineHome.jsx
- *
- * Changes:
- *  ✓ Notification CTA now navigates to /dashboard/discipline/notifications
- *  ✓ Recent-notifications mini-feed REMOVED (use notifications page instead)
- *  ✓ All other sections unchanged
- */
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -49,31 +41,14 @@ const DisciplineHome = ({ unreadCount = 0 }) => {
   const userId   = localStorage.getItem('userId');
   const schoolId = localStorage.getItem('schoolId');
 
-  const [stats,        setStats]        = useState({ pendingJustifications: 0, punishmentsIssued: 0 });
-  const [loading,      setLoading]      = useState(true);
-  const [localUnread,  setLocalUnread]  = useState(unreadCount);
+  const [stats,   setStats]   = useState({ pendingJustifications: 0, punishmentsIssued: 0 });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => { fetchData(); }, []);
 
   const fetchData = async () => {
     try {
       setLoading(true);
-
-      /* ── Unread count ── */
-      const { data: notifsData } = await supabase
-        .from('notifications')
-        .select('created_at')
-        .eq('school_id', parseInt(schoolId))
-        .or('target_type.eq.school,target_type.eq.discipline_master,target_type.eq.staff')
-        .order('created_at', { ascending: false })
-        .limit(50);
-
-      const notifList = notifsData || [];
-      const readAt    = localStorage.getItem(`notif_read_at_discipline_${schoolId}_${userId}`);
-      const unread    = readAt
-        ? notifList.filter(n => new Date(n.created_at) > new Date(readAt)).length
-        : notifList.length;
-      setLocalUnread(unread);
 
       /* ── Stats ── */
       const [{ count: justCount }, { count: punishCount }] = await Promise.all([
@@ -166,7 +141,7 @@ const DisciplineHome = ({ unreadCount = 0 }) => {
             <div
               className={cn(
                 'relative glass rounded-2xl flex items-center gap-5 p-5 border transition-all duration-300',
-                localUnread > 0
+                unreadCount > 0
                   ? 'border-orange-500/40 bg-orange-500/5 group-hover:border-orange-500/60'
                   : 'border-white/10 group-hover:border-orange-500/30',
               )}
@@ -176,14 +151,14 @@ const DisciplineHome = ({ unreadCount = 0 }) => {
                 <div
                   className={cn(
                     'p-4 rounded-2xl transition-transform duration-300 group-hover:scale-110',
-                    localUnread > 0
+                    unreadCount > 0
                       ? 'bg-gradient-to-br from-orange-500 to-red-500 shadow-lg shadow-orange-500/30'
                       : 'bg-white/8',
                   )}
                 >
-                  <Bell className={cn('h-7 w-7', localUnread > 0 ? 'text-white' : 'text-muted-foreground')} />
+                  <Bell className={cn('h-7 w-7', unreadCount > 0 ? 'text-white' : 'text-muted-foreground')} />
                 </div>
-                {localUnread > 0 && (
+                {unreadCount > 0 && (
                   <span className="absolute inset-0 rounded-2xl border-2 border-orange-400 animate-ping opacity-30" />
                 )}
               </div>
@@ -192,10 +167,10 @@ const DisciplineHome = ({ unreadCount = 0 }) => {
               <div className="flex-1 text-left min-w-0">
                 <div className="flex items-center gap-3 flex-wrap">
                   <p className="font-bold text-lg">{t('notifications')}</p>
-                  {localUnread > 0 ? (
+                  {unreadCount > 0 ? (
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-orange-500 to-red-500 text-white text-xs font-bold shadow-md shadow-orange-500/30">
                       <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                      {localUnread} {t('unreadNotifications')}
+                      {unreadCount} {t('unreadNotifications')}
                     </span>
                   ) : (
                     <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-green-500/15 text-green-400 text-xs font-semibold border border-green-500/25">
@@ -305,15 +280,6 @@ const DisciplineHome = ({ unreadCount = 0 }) => {
         </motion.div>
 
       </motion.div>
-
-      <style>{`
-        @keyframes ring {
-          0%,100% { transform: rotate(0); }
-          10%,30%  { transform: rotate(-12deg); }
-          20%,40%  { transform: rotate(12deg); }
-          50%      { transform: rotate(0); }
-        }
-      `}</style>
     </>
   );
 };

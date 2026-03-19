@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { Home, FileText, LogOut, Menu, Cloud, CheckSquare, Scale, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,23 +9,77 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
+import { supabase } from '@/lib/customSupabaseClient';
 import { useDeviceNotifications } from '@/hooks/useDeviceNotifications';
 import ProfileSheet from '@/components/ProfileSheet';
+
 import DisciplineHome from '@/pages/discipline/DisciplineHome';
 import RegisterReviewPage from '@/pages/discipline/RegisterReviewPage';
 import PunishPage from '@/pages/discipline/PunishPage';
 import JustificationsPage from '@/pages/discipline/JustificationsPage';
 import DisciplineChatPage from '@/pages/discipline/DisciplineChatPage';
+import DisciplineNotificationsPage from '@/pages/discipline/DisciplineNotificationsPage';
 
 const getInitials = (name = '') => name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'DM';
 const ACCENT = { from: 'from-orange-500', to: 'to-red-500', glow: 'shadow-orange-500/40', text: 'text-orange-400', ring: 'ring-orange-500/30', mobileActive: 'bg-orange-500/15', iconGlow: 'drop-shadow-[0_0_8px_rgba(249,115,22,0.9)]' };
 
+const UnreadDot = ({ count }) => {
+  if (!count) return null;
+  return (
+    <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-[3px] rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center border border-background shadow-lg shadow-red-500/50 leading-none">
+      {count > 9 ? '9+' : count}
+    </span>
+  );
+};
+
 const DisciplineDashboard = () => {
   const location = useLocation(); const navigate = useNavigate(); const { signOut } = useAuth(); const { t } = useLanguage();
-  const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
-  const [profileOpen, setProfileOpen] = React.useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  
   useDeviceNotifications();
+  
   const userName = localStorage.getItem('userName') || 'Discipline Master';
+  const userId = localStorage.getItem('userId');
+  const schoolId = localStorage.getItem('schoolId');
+
+  /* ── Unread badge sync ────────────────────────────── */
+  const syncUnread = useCallback(async () => {
+    if (!schoolId) return;
+    const key = `notif_read_at_discipline_${schoolId}_${userId}`;
+    const readAt = localStorage.getItem(key) || '1970-01-01';
+    const { data } = await supabase.from('notifications')
+      .select('id, target_type, target_id')
+      .eq('school_id', parseInt(schoolId)).gt('created_at', readAt);
+    if (!data) return;
+    const count = data.filter(n =>
+      n.target_type === 'school' || n.target_type === 'staff' ||
+      (n.target_type === 'discipline_master' && String(n.target_id) === String(userId))
+    ).length;
+    setUnreadCount(count);
+  }, [schoolId, userId]);
+
+  useEffect(() => { syncUnread(); }, [syncUnread]);
+
+  useEffect(() => {
+    if (!schoolId) return;
+    const ch = supabase.channel(`badge_dm_${schoolId}_${userId}`)
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `school_id=eq.${parseInt(schoolId)}` },
+        () => syncUnread()
+      ).subscribe();
+    return () => supabase.removeChannel(ch);
+  }, [schoolId, userId, syncUnread]);
+
+  useEffect(() => {
+    if (location.pathname.includes('/notifications')) {
+      const key = `notif_read_at_discipline_${schoolId}_${userId}`;
+      localStorage.setItem(key, new Date().toISOString());
+      setUnreadCount(0);
+    }
+  }, [location.pathname, schoolId, userId]);
+
   const navItems = [
     { icon: Home, label: t('overview'), path: '/dashboard/discipline', shortLabel: 'Home' },
     { icon: CheckSquare, label: t('registerReview'), path: '/dashboard/discipline/registers', shortLabel: 'Register' },
@@ -33,6 +87,7 @@ const DisciplineDashboard = () => {
     { icon: FileText, label: t('justifications'), path: '/dashboard/discipline/justifications', shortLabel: 'Justify' },
     { icon: MessageSquare, label: t('chat'), path: '/dashboard/discipline/chat', shortLabel: 'Chat' },
   ];
+  
   const handleSignOut = async () => { await signOut(); localStorage.clear(); navigate('/'); };
   const isActive = (p) => p === '/dashboard/discipline' ? location.pathname === p : location.pathname.startsWith(p);
 
@@ -68,25 +123,38 @@ const DisciplineDashboard = () => {
                 <div className="text-sm overflow-hidden text-left"><p className="font-semibold leading-none truncate max-w-[90px]">{userName}</p><p className="text-[10px] text-muted-foreground mt-0.5">Discipline Master</p></div>
               </button>
             ) : (
-              <button onClick={() => setProfileOpen(true)} className={`h-9 w-9 rounded-full bg-gradient-to-tr ${ACCENT.from} ${ACCENT.to} flex items-center justify-center text-white text-xs font-bold hover:opacity-80 active:scale-95`}>{getInitials(userName)}</button>
+              <button onClick={() => setProfileOpen(true)} className="relative">
+                <div className={`h-9 w-9 rounded-full bg-gradient-to-tr ${ACCENT.from} ${ACCENT.to} flex items-center justify-center text-white text-xs font-bold hover:opacity-80 active:scale-95`}>{getInitials(userName)}</div>
+                <UnreadDot count={unreadCount} />
+              </button>
             )}
           </div>
           <Button onClick={handleSignOut} className={cn('w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl', isSidebarOpen ? 'justify-start' : 'justify-center px-2')}><LogOut className={cn('h-4 w-4', isSidebarOpen && 'mr-2')} />{isSidebarOpen && <span className="text-sm">{t('logout')}</span>}</Button>
         </div>
       </motion.aside>
+      
       <div className="md:hidden flex items-center justify-between px-4 h-14 border-b border-white/10 bg-card/80 backdrop-blur-xl sticky top-0 z-50">
         <LogoDropdown><div className={`flex items-center gap-2 font-bold text-base bg-clip-text text-transparent bg-gradient-to-r ${ACCENT.from} ${ACCENT.to}`}><Cloud className="text-orange-500 h-5 w-5" /><span>CloudCampus</span></div></LogoDropdown>
         <div className="flex items-center gap-1.5"><LanguageSwitcher /><ThemeToggle />
-          <button onClick={() => setProfileOpen(true)} className={`h-8 w-8 rounded-full bg-gradient-to-tr ${ACCENT.from} ${ACCENT.to} flex items-center justify-center text-white text-xs font-bold`}>{getInitials(userName)}</button>
+          <button onClick={() => setProfileOpen(true)} className="relative">
+            <div className={`h-8 w-8 rounded-full bg-gradient-to-tr ${ACCENT.from} ${ACCENT.to} flex items-center justify-center text-white text-xs font-bold`}>{getInitials(userName)}</div>
+            <UnreadDot count={unreadCount} />
+          </button>
         </div>
       </div>
+      
       <main className="flex-1 p-4 md:p-8 pb-28 md:pb-8 overflow-y-auto h-[calc(100vh-56px)] md:h-screen scroll-smooth">
         <Routes>
-          <Route path="/" element={<DisciplineHome />} /><Route path="/registers" element={<RegisterReviewPage />} />
-          <Route path="/punishments" element={<PunishPage />} /><Route path="/justifications" element={<JustificationsPage />} />
-          <Route path="/chat" element={<DisciplineChatPage />} /><Route path="*" element={<DisciplineHome />} />
+          <Route path="/" element={<DisciplineHome unreadCount={unreadCount} />} />
+          <Route path="/registers" element={<RegisterReviewPage />} />
+          <Route path="/punishments" element={<PunishPage />} />
+          <Route path="/justifications" element={<JustificationsPage />} />
+          <Route path="/chat" element={<DisciplineChatPage />} />
+          <Route path="/notifications" element={<DisciplineNotificationsPage />} />
+          <Route path="*" element={<DisciplineHome unreadCount={unreadCount} />} />
         </Routes>
       </main>
+      
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 px-3 pb-3">
         <div className="bg-card/80 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.35)] overflow-hidden">
           <div className="flex items-stretch px-1 py-1">{navItems.map((item) => { const active = isActive(item.path); return (
@@ -99,6 +167,7 @@ const DisciplineDashboard = () => {
           ); })}</div>
         </div>
       </nav>
+      
       <ProfileSheet open={profileOpen} onClose={() => setProfileOpen(false)} userName={userName} roleLabel="Discipline Master" accentFrom={ACCENT.from} accentTo={ACCENT.to} onSignOut={handleSignOut} />
     </div>
   );
