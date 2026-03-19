@@ -1,16 +1,14 @@
 /**
  * AdminSchoolSettingsPage.jsx
  *
+ * KEY FIX: `isConfigured` is explicit STATE set once inside the useEffect
+ * after the DB fetch completes. It is NEVER re-derived from `school?.latitude`
+ * on the fly — that caused the page to flash "not configured" on every refresh
+ * because school=null during the loading phase made the derived value false.
+ *
  * Two display modes:
- *
- *  CONFIGURED MODE  — school already has latitude/longitude saved.
- *    Shown automatically on every load/refresh if the DB has coordinates.
- *    Displays the saved values, radius, and a green "active" status.
- *    "Edit location" button switches to edit mode.
- *
- *  EDIT MODE  — school has no coordinates yet, OR admin clicked "Edit location".
- *    Shows the form with "Use my location" GPS shortcut.
- *    After saving, immediately returns to configured mode.
+ *  CONFIGURED  — DB has lat/lng → show read-only card (persists across refreshes)
+ *  EDIT        — no coords yet, OR admin clicked "Edit" → show form
  *
  * Required columns (run once in Supabase):
  *   ALTER TABLE schools
@@ -22,7 +20,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   MapPin, Navigation, Save, Loader2, CheckCircle2,
-  AlertTriangle, Info, Pencil, X, RefreshCw,
+  AlertTriangle, Info, Pencil, X,
 } from 'lucide-react';
 import { Helmet } from 'react-helmet';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -32,11 +30,6 @@ import { useToast } from '@/components/ui/use-toast';
 import { useLanguage } from '@/contexts/LanguageContext';
 import PageTransition from '@/components/PageTransition';
 import { cn } from '@/lib/utils';
-
-const fadeUp = {
-  hidden:  { opacity: 0, y: 14 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.32, ease: 'easeOut' } },
-};
 
 /* ── Configured read-only card ────────────────────────── */
 const ConfiguredCard = ({ school, onEdit, onClear }) => (
@@ -60,8 +53,6 @@ const ConfiguredCard = ({ school, onEdit, onClear }) => (
           </p>
         </div>
       </div>
-
-      {/* Edit button */}
       <button
         onClick={onEdit}
         className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold border border-white/15 bg-white/5 hover:bg-white/10 transition-all"
@@ -70,19 +61,19 @@ const ConfiguredCard = ({ school, onEdit, onClear }) => (
       </button>
     </div>
 
-    {/* Coordinates display */}
+    {/* Coordinates */}
     <div className="grid grid-cols-2 gap-3">
       <div className="p-4 rounded-xl bg-white/4 border border-white/8">
         <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 mb-1">Latitude</p>
-        <p className="font-mono font-bold text-sm">{school.latitude.toFixed(7)}</p>
+        <p className="font-mono font-bold text-sm">{Number(school.latitude).toFixed(7)}</p>
       </div>
       <div className="p-4 rounded-xl bg-white/4 border border-white/8">
         <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 mb-1">Longitude</p>
-        <p className="font-mono font-bold text-sm">{school.longitude.toFixed(7)}</p>
+        <p className="font-mono font-bold text-sm">{Number(school.longitude).toFixed(7)}</p>
       </div>
     </div>
 
-    {/* Radius bar */}
+    {/* Radius */}
     <div className="p-4 rounded-xl bg-white/4 border border-white/8 flex items-center justify-between gap-4">
       <div>
         <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 mb-1">Allowed radius</p>
@@ -91,7 +82,6 @@ const ConfiguredCard = ({ school, onEdit, onClear }) => (
           <span className="text-muted-foreground font-normal">metres</span>
         </p>
       </div>
-      {/* Visual radius bar */}
       <div className="flex-1 max-w-[140px]">
         <div className="h-2 rounded-full bg-white/10 overflow-hidden">
           <div
@@ -100,7 +90,7 @@ const ConfiguredCard = ({ school, onEdit, onClear }) => (
           />
         </div>
         <p className="text-[10px] text-muted-foreground mt-1 text-right">
-          {school.geo_radius_meters ?? 300} / 1000 m max
+          {school.geo_radius_meters ?? 300} / 1000 m
         </p>
       </div>
     </div>
@@ -114,7 +104,6 @@ const ConfiguredCard = ({ school, onEdit, onClear }) => (
       </div>
     )}
 
-    {/* Disable option */}
     <button
       onClick={onClear}
       className="text-xs text-red-400/70 hover:text-red-400 transition-colors underline underline-offset-2"
@@ -131,22 +120,27 @@ const AdminSchoolSettingsPage = () => {
 
   const schoolId = localStorage.getItem('schoolId');
 
-  const [school,   setSchool]   = useState(null);   // full school record from DB
-  const [loading,  setLoading]  = useState(true);
-  const [editMode, setEditMode] = useState(false);  // false = show configured card, true = show form
+  // loading covers the initial DB fetch — nothing is shown until it completes
+  const [loading,      setLoading]      = useState(true);
+  const [school,       setSchool]       = useState(null);
+
+  // ← THIS is the key: explicit state, set once after fetch, never re-derived
+  const [isConfigured, setIsConfigured] = useState(false);
+  const [editMode,     setEditMode]     = useState(false);
+
   const [saving,   setSaving]   = useState(false);
   const [locating, setLocating] = useState(false);
 
-  // form fields (only used in edit mode)
+  // form fields
   const [lat,    setLat]    = useState('');
   const [lng,    setLng]    = useState('');
   const [radius, setRadius] = useState('300');
 
-  /* ── fetch school on mount ──────────────────────────── */
+  /* ── fetch on mount ──────────────────────────────────── */
   useEffect(() => {
-    if (!schoolId) return;
+    if (!schoolId) { setLoading(false); return; }
+
     (async () => {
-      setLoading(true);
       const { data, error } = await supabase
         .from('schools')
         .select('id, name, city, latitude, longitude, geo_radius_meters')
@@ -155,21 +149,27 @@ const AdminSchoolSettingsPage = () => {
 
       if (!error && data) {
         setSchool(data);
-        // If coordinates already saved: show configured card (do NOT open edit mode)
-        // If not saved: open edit mode so admin can enter them
-        const isConfigured = data.latitude != null && data.longitude != null;
-        setEditMode(!isConfigured);
 
-        // Pre-fill edit form fields either way
+        // Determine once, set explicitly — this is the ground truth for this session
+        const configured = data.latitude != null && data.longitude != null;
+        setIsConfigured(configured);
+        setEditMode(!configured);          // form open only when not yet configured
+
+        // Pre-fill form fields in case admin later clicks Edit
         setLat(data.latitude  != null ? String(data.latitude)           : '');
         setLng(data.longitude != null ? String(data.longitude)          : '');
         setRadius(data.geo_radius_meters != null ? String(data.geo_radius_meters) : '300');
+      } else {
+        // Columns may not exist yet — open the form
+        setIsConfigured(false);
+        setEditMode(true);
       }
-      setLoading(false);
+
+      setLoading(false);   // ← render only after we know the real state
     })();
   }, [schoolId]);
 
-  /* ── GPS shortcut ───────────────────────────────────── */
+  /* ── GPS shortcut ────────────────────────────────────── */
   const handleLocateMe = () => {
     if (!navigator.geolocation) {
       toast({ variant: 'destructive', title: 'GPS not available', description: 'Your browser does not support geolocation.' });
@@ -194,15 +194,15 @@ const AdminSchoolSettingsPage = () => {
     );
   };
 
-  /* ── save ───────────────────────────────────────────── */
+  /* ── save ─────────────────────────────────────────────── */
   const handleSave = async () => {
     const parsedLat    = parseFloat(lat);
     const parsedLng    = parseFloat(lng);
     const parsedRadius = parseInt(radius, 10);
 
-    if (lat && (isNaN(parsedLat) || parsedLat < -90  || parsedLat > 90))  { toast({ variant: 'destructive', title: 'Invalid latitude',  description: 'Must be between -90 and 90.'   }); return; }
-    if (lng && (isNaN(parsedLng) || parsedLng < -180 || parsedLng > 180)) { toast({ variant: 'destructive', title: 'Invalid longitude', description: 'Must be between -180 and 180.' }); return; }
-    if (isNaN(parsedRadius) || parsedRadius < 50)                          { toast({ variant: 'destructive', title: 'Invalid radius',    description: 'Minimum radius is 50 metres.'  }); return; }
+    if (lat && (isNaN(parsedLat)    || parsedLat < -90   || parsedLat > 90))   { toast({ variant: 'destructive', title: 'Invalid latitude',  description: 'Must be between -90 and 90.'   }); return; }
+    if (lng && (isNaN(parsedLng)    || parsedLng < -180  || parsedLng > 180))  { toast({ variant: 'destructive', title: 'Invalid longitude', description: 'Must be between -180 and 180.' }); return; }
+    if (isNaN(parsedRadius) || parsedRadius < 50)                               { toast({ variant: 'destructive', title: 'Invalid radius',    description: 'Minimum radius is 50 metres.'  }); return; }
 
     setSaving(true);
     try {
@@ -215,13 +215,17 @@ const AdminSchoolSettingsPage = () => {
         .from('schools').update(payload).eq('id', parseInt(schoolId));
       if (error) throw error;
 
-      // Update local school state and switch back to configured card
-      setSchool(prev => ({ ...prev, ...payload }));
-      setEditMode(false);
+      const updatedSchool = { ...school, ...payload };
+      setSchool(updatedSchool);
+
+      // Only show configured card if actual coordinates were saved
+      const nowConfigured = payload.latitude != null && payload.longitude != null;
+      setIsConfigured(nowConfigured);
+      setEditMode(!nowConfigured);
 
       toast({
         title: '✓ Settings saved',
-        description: lat
+        description: nowConfigured
           ? `School location set · radius ${parsedRadius} m`
           : 'Geolocation disabled for this school.',
         className: 'bg-green-500/10 border-green-500/50 text-green-400',
@@ -233,7 +237,7 @@ const AdminSchoolSettingsPage = () => {
     }
   };
 
-  /* ── clear / disable geo ───────────────────────────── */
+  /* ── disable geo ──────────────────────────────────────── */
   const handleClear = async () => {
     setSaving(true);
     try {
@@ -242,9 +246,12 @@ const AdminSchoolSettingsPage = () => {
         .update({ latitude: null, longitude: null, geo_radius_meters: 300 })
         .eq('id', parseInt(schoolId));
       if (error) throw error;
+
       setSchool(prev => ({ ...prev, latitude: null, longitude: null, geo_radius_meters: 300 }));
       setLat(''); setLng(''); setRadius('300');
+      setIsConfigured(false);
       setEditMode(true);
+
       toast({ title: 'Geolocation disabled', description: 'Teachers can now sign from anywhere.' });
     } catch (err) {
       toast({ variant: 'destructive', title: t('error'), description: err.message });
@@ -253,18 +260,15 @@ const AdminSchoolSettingsPage = () => {
     }
   };
 
-  /* ── cancel edit — go back to configured card ───────── */
+  /* ── cancel edit ──────────────────────────────────────── */
   const handleCancelEdit = () => {
-    // Reset fields to saved values
     setLat(school?.latitude  != null ? String(school.latitude)           : '');
     setLng(school?.longitude != null ? String(school.longitude)          : '');
     setRadius(school?.geo_radius_meters != null ? String(school.geo_radius_meters) : '300');
     setEditMode(false);
   };
 
-  const isConfigured = school?.latitude != null && school?.longitude != null;
-
-  /* ── render ─────────────────────────────────────────── */
+  /* ── render ───────────────────────────────────────────── */
   return (
     <>
       <Helmet><title>School Settings · Admin · CloudCampus</title></Helmet>
@@ -278,10 +282,11 @@ const AdminSchoolSettingsPage = () => {
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
               {t('schoolSettingsDesc') ||
-                'Set the school's GPS coordinates so teachers can only sign logbooks from campus.'}
+                'Set the school\'s GPS coordinates so teachers can only sign logbooks from campus.'}
             </p>
           </motion.div>
 
+          {/* Show skeletons until the fetch is done — nothing else renders until loading=false */}
           {loading ? (
             <div className="space-y-4">
               {[0, 1, 2].map(i => (
@@ -291,7 +296,7 @@ const AdminSchoolSettingsPage = () => {
           ) : (
             <AnimatePresence mode="wait">
 
-              {/* ── CONFIGURED MODE ──────────────────────── */}
+              {/* ── CONFIGURED: DB has lat+lng and admin has not clicked Edit ── */}
               {isConfigured && !editMode && (
                 <motion.div key="configured"
                   initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -304,14 +309,14 @@ const AdminSchoolSettingsPage = () => {
                 </motion.div>
               )}
 
-              {/* ── EDIT / SETUP MODE ────────────────────── */}
+              {/* ── EDIT / SETUP: no coords yet OR admin clicked Edit ── */}
               {(!isConfigured || editMode) && (
                 <motion.div key="edit"
                   initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}
                   className="space-y-5">
 
-                  {/* "Not configured" warning — only shown when there are no coords yet */}
+                  {/* Warning shown only when truly not configured (not when editing existing) */}
                   {!isConfigured && (
                     <div className="flex items-start gap-3 p-4 rounded-2xl border border-amber-500/25 bg-amber-500/6">
                       <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
@@ -324,23 +329,19 @@ const AdminSchoolSettingsPage = () => {
                     </div>
                   )}
 
-                  {/* School info strip */}
+                  {/* School info */}
                   {school?.name && (
-                    <motion.div variants={fadeUp}>
-                      <div className="px-4 py-3 rounded-xl bg-white/4 border border-white/8 flex items-center gap-3">
-                        <MapPin className="h-4 w-4 text-indigo-400 shrink-0" />
-                        <div>
-                          <p className="font-bold text-sm">{school.name}</p>
-                          {school.city && <p className="text-xs text-muted-foreground">{school.city}</p>}
-                        </div>
+                    <div className="px-4 py-3 rounded-xl bg-white/4 border border-white/8 flex items-center gap-3">
+                      <MapPin className="h-4 w-4 text-indigo-400 shrink-0" />
+                      <div>
+                        <p className="font-bold text-sm">{school.name}</p>
+                        {school.city && <p className="text-xs text-muted-foreground">{school.city}</p>}
                       </div>
-                    </motion.div>
+                    </div>
                   )}
 
-                  {/* Form card */}
+                  {/* Form */}
                   <div className="glass rounded-2xl p-6 space-y-5">
-
-                    {/* Form header + GPS button */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2.5">
                         <div className="p-2 rounded-xl bg-indigo-500/15">
@@ -350,7 +351,6 @@ const AdminSchoolSettingsPage = () => {
                           {editMode && isConfigured ? 'Edit location' : 'Set school location'}
                         </h2>
                       </div>
-
                       <button
                         onClick={handleLocateMe}
                         disabled={locating}
@@ -362,80 +362,52 @@ const AdminSchoolSettingsPage = () => {
                       </button>
                     </div>
 
-                    {/* Coordinate inputs */}
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1.5">
                         <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Latitude</Label>
-                        <Input
-                          type="number" step="any"
-                          placeholder="e.g. 3.8480"
-                          value={lat}
-                          onChange={e => setLat(e.target.value)}
-                          className="h-11 bg-white/5 border-white/10 rounded-xl focus:border-indigo-500/50 font-mono text-sm"
-                        />
+                        <Input type="number" step="any" placeholder="e.g. 3.8480"
+                          value={lat} onChange={e => setLat(e.target.value)}
+                          className="h-11 bg-white/5 border-white/10 rounded-xl focus:border-indigo-500/50 font-mono text-sm" />
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Longitude</Label>
-                        <Input
-                          type="number" step="any"
-                          placeholder="e.g. 11.5021"
-                          value={lng}
-                          onChange={e => setLng(e.target.value)}
-                          className="h-11 bg-white/5 border-white/10 rounded-xl focus:border-indigo-500/50 font-mono text-sm"
-                        />
+                        <Input type="number" step="any" placeholder="e.g. 11.5021"
+                          value={lng} onChange={e => setLng(e.target.value)}
+                          className="h-11 bg-white/5 border-white/10 rounded-xl focus:border-indigo-500/50 font-mono text-sm" />
                       </div>
                     </div>
 
-                    {/* Radius */}
                     <div className="space-y-1.5">
                       <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                         Allowed radius (metres)
                       </Label>
-                      <Input
-                        type="number" min="50" max="5000" step="50"
-                        value={radius}
-                        onChange={e => setRadius(e.target.value)}
-                        className="h-11 bg-white/5 border-white/10 rounded-xl focus:border-indigo-500/50"
-                      />
-                      <p className="text-[11px] text-muted-foreground">
-                        Recommended: 100 – 500 m. Minimum 50 m.
-                      </p>
+                      <Input type="number" min="50" max="5000" step="50"
+                        value={radius} onChange={e => setRadius(e.target.value)}
+                        className="h-11 bg-white/5 border-white/10 rounded-xl focus:border-indigo-500/50" />
+                      <p className="text-[11px] text-muted-foreground">Recommended: 100 – 500 m. Minimum 50 m.</p>
                     </div>
 
-                    {/* Info note */}
                     <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-white/4 border border-white/8 text-xs text-muted-foreground">
                       <Info className="h-3.5 w-3.5 shrink-0 mt-0.5 text-indigo-400" />
                       <span>
-                        Leave latitude and longitude blank to disable enforcement — teachers can sign from anywhere.
-                        <br />
+                        Leave fields blank to disable enforcement.
                         <span className="text-indigo-400 font-semibold mt-1 block">
                           Run once in Supabase:{' '}
-                          <code className="font-mono">
-                            ALTER TABLE schools ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION, ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION, ADD COLUMN IF NOT EXISTS geo_radius_meters INTEGER DEFAULT 300;
-                          </code>
+                          <code className="font-mono">ALTER TABLE schools ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION, ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION, ADD COLUMN IF NOT EXISTS geo_radius_meters INTEGER DEFAULT 300;</code>
                         </span>
                       </span>
                     </div>
 
-                    {/* Action buttons */}
                     <div className={cn('grid gap-3', editMode && isConfigured ? 'grid-cols-2' : 'grid-cols-1')}>
-                      {/* Cancel — only shown when editing existing config */}
                       {editMode && isConfigured && (
-                        <button
-                          onClick={handleCancelEdit}
-                          className="py-3.5 rounded-2xl font-bold text-sm border border-white/15 bg-white/5 hover:bg-white/10 transition-all flex items-center justify-center gap-2"
-                        >
+                        <button onClick={handleCancelEdit}
+                          className="py-3.5 rounded-2xl font-bold text-sm border border-white/15 bg-white/5 hover:bg-white/10 transition-all flex items-center justify-center gap-2">
                           <X className="h-4 w-4" /> Cancel
                         </button>
                       )}
-
-                      {/* Save */}
-                      <button
-                        onClick={handleSave}
-                        disabled={saving}
+                      <button onClick={handleSave} disabled={saving}
                         className="py-3.5 rounded-2xl font-bold text-sm text-white flex items-center justify-center gap-2 transition-all active:scale-[0.97] disabled:opacity-60"
-                        style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', boxShadow: '0 6px 20px rgba(99,102,241,0.3)' }}
-                      >
+                        style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', boxShadow: '0 6px 20px rgba(99,102,241,0.3)' }}>
                         {saving
                           ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</>
                           : <><Save className="h-4 w-4" /> Save settings</>}
