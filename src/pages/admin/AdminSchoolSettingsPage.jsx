@@ -1,22 +1,28 @@
 /**
  * AdminSchoolSettingsPage.jsx
- * Allows the administrator to configure the school's geolocation:
- *   - latitude / longitude (required for teacher geo-validation)
- *   - geo_radius_meters (default 300 m)
  *
- * These values are stored in the `schools` table and used by
- * ActivityPage.jsx to verify teacher proximity before logbook signing.
+ * Two display modes:
  *
- * Required columns on the `schools` table (run once in Supabase SQL editor):
- *   ALTER TABLE schools ADD COLUMN IF NOT EXISTS latitude  DOUBLE PRECISION;
- *   ALTER TABLE schools ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
- *   ALTER TABLE schools ADD COLUMN IF NOT EXISTS geo_radius_meters INTEGER DEFAULT 300;
+ *  CONFIGURED MODE  — school already has latitude/longitude saved.
+ *    Shown automatically on every load/refresh if the DB has coordinates.
+ *    Displays the saved values, radius, and a green "active" status.
+ *    "Edit location" button switches to edit mode.
+ *
+ *  EDIT MODE  — school has no coordinates yet, OR admin clicked "Edit location".
+ *    Shows the form with "Use my location" GPS shortcut.
+ *    After saving, immediately returns to configured mode.
+ *
+ * Required columns (run once in Supabase):
+ *   ALTER TABLE schools
+ *     ADD COLUMN IF NOT EXISTS latitude          DOUBLE PRECISION,
+ *     ADD COLUMN IF NOT EXISTS longitude         DOUBLE PRECISION,
+ *     ADD COLUMN IF NOT EXISTS geo_radius_meters INTEGER DEFAULT 300;
  */
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   MapPin, Navigation, Save, Loader2, CheckCircle2,
-  AlertTriangle, RefreshCw, Info,
+  AlertTriangle, Info, Pencil, X, RefreshCw,
 } from 'lucide-react';
 import { Helmet } from 'react-helmet';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -27,29 +33,116 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import PageTransition from '@/components/PageTransition';
 import { cn } from '@/lib/utils';
 
-const stagger = { hidden: {}, visible: { transition: { staggerChildren: 0.07 } } };
-const fadeUp  = {
+const fadeUp = {
   hidden:  { opacity: 0, y: 14 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.32, ease: 'easeOut' } },
 };
 
+/* ── Configured read-only card ────────────────────────── */
+const ConfiguredCard = ({ school, onEdit, onClear }) => (
+  <motion.div
+    initial={{ opacity: 0, scale: 0.97 }}
+    animate={{ opacity: 1, scale: 1 }}
+    className="glass rounded-2xl p-6 border border-emerald-500/30 bg-emerald-500/5 space-y-5"
+  >
+    {/* Header */}
+    <div className="flex items-start justify-between gap-3">
+      <div className="flex items-center gap-3">
+        <div className="h-12 w-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/25 flex items-center justify-center shrink-0">
+          <CheckCircle2 className="h-6 w-6 text-emerald-400" />
+        </div>
+        <div>
+          <p className="font-black text-base text-emerald-400">Geolocation active</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Teachers must be within{' '}
+            <span className="font-bold text-foreground">{school.geo_radius_meters ?? 300} m</span>{' '}
+            of this school to sign the logbook.
+          </p>
+        </div>
+      </div>
+
+      {/* Edit button */}
+      <button
+        onClick={onEdit}
+        className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold border border-white/15 bg-white/5 hover:bg-white/10 transition-all"
+      >
+        <Pencil className="h-3.5 w-3.5" /> Edit
+      </button>
+    </div>
+
+    {/* Coordinates display */}
+    <div className="grid grid-cols-2 gap-3">
+      <div className="p-4 rounded-xl bg-white/4 border border-white/8">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 mb-1">Latitude</p>
+        <p className="font-mono font-bold text-sm">{school.latitude.toFixed(7)}</p>
+      </div>
+      <div className="p-4 rounded-xl bg-white/4 border border-white/8">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 mb-1">Longitude</p>
+        <p className="font-mono font-bold text-sm">{school.longitude.toFixed(7)}</p>
+      </div>
+    </div>
+
+    {/* Radius bar */}
+    <div className="p-4 rounded-xl bg-white/4 border border-white/8 flex items-center justify-between gap-4">
+      <div>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 mb-1">Allowed radius</p>
+        <p className="font-bold text-sm">
+          {school.geo_radius_meters ?? 300}{' '}
+          <span className="text-muted-foreground font-normal">metres</span>
+        </p>
+      </div>
+      {/* Visual radius bar */}
+      <div className="flex-1 max-w-[140px]">
+        <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-700"
+            style={{ width: `${Math.min(100, ((school.geo_radius_meters ?? 300) / 1000) * 100)}%` }}
+          />
+        </div>
+        <p className="text-[10px] text-muted-foreground mt-1 text-right">
+          {school.geo_radius_meters ?? 300} / 1000 m max
+        </p>
+      </div>
+    </div>
+
+    {/* School name */}
+    {school.name && (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <MapPin className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+        <span className="font-semibold text-foreground">{school.name}</span>
+        {school.city && <span>· {school.city}</span>}
+      </div>
+    )}
+
+    {/* Disable option */}
+    <button
+      onClick={onClear}
+      className="text-xs text-red-400/70 hover:text-red-400 transition-colors underline underline-offset-2"
+    >
+      Disable geolocation for this school
+    </button>
+  </motion.div>
+);
+
+/* ══════════════════════════════════════════════════════ */
 const AdminSchoolSettingsPage = () => {
   const { toast } = useToast();
   const { t }     = useLanguage();
 
   const schoolId = localStorage.getItem('schoolId');
 
-  const [school,        setSchool]        = useState(null);
-  const [loading,       setLoading]       = useState(true);
-  const [saving,        setSaving]        = useState(false);
-  const [locating,      setLocating]      = useState(false);
+  const [school,   setSchool]   = useState(null);   // full school record from DB
+  const [loading,  setLoading]  = useState(true);
+  const [editMode, setEditMode] = useState(false);  // false = show configured card, true = show form
+  const [saving,   setSaving]   = useState(false);
+  const [locating, setLocating] = useState(false);
 
-  /* form fields */
+  // form fields (only used in edit mode)
   const [lat,    setLat]    = useState('');
   const [lng,    setLng]    = useState('');
   const [radius, setRadius] = useState('300');
 
-  /* ── fetch current school record ────────────────────── */
+  /* ── fetch school on mount ──────────────────────────── */
   useEffect(() => {
     if (!schoolId) return;
     (async () => {
@@ -62,6 +155,12 @@ const AdminSchoolSettingsPage = () => {
 
       if (!error && data) {
         setSchool(data);
+        // If coordinates already saved: show configured card (do NOT open edit mode)
+        // If not saved: open edit mode so admin can enter them
+        const isConfigured = data.latitude != null && data.longitude != null;
+        setEditMode(!isConfigured);
+
+        // Pre-fill edit form fields either way
         setLat(data.latitude  != null ? String(data.latitude)           : '');
         setLng(data.longitude != null ? String(data.longitude)          : '');
         setRadius(data.geo_radius_meters != null ? String(data.geo_radius_meters) : '300');
@@ -70,14 +169,10 @@ const AdminSchoolSettingsPage = () => {
     })();
   }, [schoolId]);
 
-  /* ── use browser geolocation ────────────────────────── */
+  /* ── GPS shortcut ───────────────────────────────────── */
   const handleLocateMe = () => {
     if (!navigator.geolocation) {
-      toast({
-        variant: 'destructive',
-        title: 'GPS not available',
-        description: 'Your browser does not support geolocation.',
-      });
+      toast({ variant: 'destructive', title: 'GPS not available', description: 'Your browser does not support geolocation.' });
       return;
     }
     setLocating(true);
@@ -93,11 +188,7 @@ const AdminSchoolSettingsPage = () => {
       },
       (err) => {
         setLocating(false);
-        toast({
-          variant: 'destructive',
-          title: 'Location denied',
-          description: err.message || 'Could not obtain GPS position.',
-        });
+        toast({ variant: 'destructive', title: 'Location denied', description: err.message || 'Could not get GPS position.' });
       },
       { enableHighAccuracy: true, timeout: 15000 },
     );
@@ -109,18 +200,9 @@ const AdminSchoolSettingsPage = () => {
     const parsedLng    = parseFloat(lng);
     const parsedRadius = parseInt(radius, 10);
 
-    if (lat && (isNaN(parsedLat) || parsedLat < -90 || parsedLat > 90)) {
-      toast({ variant: 'destructive', title: 'Invalid latitude', description: 'Must be between -90 and 90.' });
-      return;
-    }
-    if (lng && (isNaN(parsedLng) || parsedLng < -180 || parsedLng > 180)) {
-      toast({ variant: 'destructive', title: 'Invalid longitude', description: 'Must be between -180 and 180.' });
-      return;
-    }
-    if (isNaN(parsedRadius) || parsedRadius < 50) {
-      toast({ variant: 'destructive', title: 'Invalid radius', description: 'Minimum radius is 50 metres.' });
-      return;
-    }
+    if (lat && (isNaN(parsedLat) || parsedLat < -90  || parsedLat > 90))  { toast({ variant: 'destructive', title: 'Invalid latitude',  description: 'Must be between -90 and 90.'   }); return; }
+    if (lng && (isNaN(parsedLng) || parsedLng < -180 || parsedLng > 180)) { toast({ variant: 'destructive', title: 'Invalid longitude', description: 'Must be between -180 and 180.' }); return; }
+    if (isNaN(parsedRadius) || parsedRadius < 50)                          { toast({ variant: 'destructive', title: 'Invalid radius',    description: 'Minimum radius is 50 metres.'  }); return; }
 
     setSaving(true);
     try {
@@ -130,11 +212,13 @@ const AdminSchoolSettingsPage = () => {
         geo_radius_meters: parsedRadius,
       };
       const { error } = await supabase
-        .from('schools')
-        .update(payload)
-        .eq('id', parseInt(schoolId));
+        .from('schools').update(payload).eq('id', parseInt(schoolId));
       if (error) throw error;
-      setSchool((prev) => ({ ...prev, ...payload }));
+
+      // Update local school state and switch back to configured card
+      setSchool(prev => ({ ...prev, ...payload }));
+      setEditMode(false);
+
       toast({
         title: '✓ Settings saved',
         description: lat
@@ -149,202 +233,219 @@ const AdminSchoolSettingsPage = () => {
     }
   };
 
+  /* ── clear / disable geo ───────────────────────────── */
+  const handleClear = async () => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('schools')
+        .update({ latitude: null, longitude: null, geo_radius_meters: 300 })
+        .eq('id', parseInt(schoolId));
+      if (error) throw error;
+      setSchool(prev => ({ ...prev, latitude: null, longitude: null, geo_radius_meters: 300 }));
+      setLat(''); setLng(''); setRadius('300');
+      setEditMode(true);
+      toast({ title: 'Geolocation disabled', description: 'Teachers can now sign from anywhere.' });
+    } catch (err) {
+      toast({ variant: 'destructive', title: t('error'), description: err.message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /* ── cancel edit — go back to configured card ───────── */
+  const handleCancelEdit = () => {
+    // Reset fields to saved values
+    setLat(school?.latitude  != null ? String(school.latitude)           : '');
+    setLng(school?.longitude != null ? String(school.longitude)          : '');
+    setRadius(school?.geo_radius_meters != null ? String(school.geo_radius_meters) : '300');
+    setEditMode(false);
+  };
+
   const isConfigured = school?.latitude != null && school?.longitude != null;
-  const hasUnsavedChanges =
-    String(lat)    !== String(school?.latitude    ?? '') ||
-    String(lng)    !== String(school?.longitude   ?? '') ||
-    String(radius) !== String(school?.geo_radius_meters ?? 300);
 
   /* ── render ─────────────────────────────────────────── */
   return (
     <>
-      <Helmet>
-        <title>School Settings · Admin · CloudCampus</title>
-      </Helmet>
+      <Helmet><title>School Settings · Admin · CloudCampus</title></Helmet>
       <PageTransition>
         <div className="max-w-2xl mx-auto space-y-7 pb-6">
 
-          {/* ── Header ─────────────────────────────────── */}
+          {/* Header */}
           <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
             <h1 className="text-3xl font-black tracking-tight">
               {t('schoolSettings') || 'School Settings'}
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
               {t('schoolSettingsDesc') ||
-                'Configure geolocation so teachers can only sign logbooks from the school campus.'}
+                'Set the school's GPS coordinates so teachers can only sign logbooks from campus.'}
             </p>
           </motion.div>
 
           {loading ? (
             <div className="space-y-4">
-              {[0, 1, 2].map((i) => (
-                <div key={i} className="h-16 rounded-2xl bg-white/5 animate-pulse" />
+              {[0, 1, 2].map(i => (
+                <div key={i} className="h-20 rounded-2xl bg-white/5 animate-pulse" />
               ))}
             </div>
           ) : (
-            <motion.div variants={stagger} initial="hidden" animate="visible" className="space-y-6">
+            <AnimatePresence mode="wait">
 
-              {/* ── Status card ──────────────────────────── */}
-              <motion.div variants={fadeUp}>
-                <div
-                  className={cn(
-                    'flex items-start gap-4 p-5 rounded-2xl border',
-                    isConfigured
-                      ? 'bg-emerald-500/6 border-emerald-500/25'
-                      : 'bg-amber-500/6 border-amber-500/25',
+              {/* ── CONFIGURED MODE ──────────────────────── */}
+              {isConfigured && !editMode && (
+                <motion.div key="configured"
+                  initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}>
+                  <ConfiguredCard
+                    school={school}
+                    onEdit={() => setEditMode(true)}
+                    onClear={handleClear}
+                  />
+                </motion.div>
+              )}
+
+              {/* ── EDIT / SETUP MODE ────────────────────── */}
+              {(!isConfigured || editMode) && (
+                <motion.div key="edit"
+                  initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}
+                  className="space-y-5">
+
+                  {/* "Not configured" warning — only shown when there are no coords yet */}
+                  {!isConfigured && (
+                    <div className="flex items-start gap-3 p-4 rounded-2xl border border-amber-500/25 bg-amber-500/6">
+                      <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold text-sm text-amber-400">Geolocation not configured</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Teachers can currently sign logbooks from anywhere. Set coordinates below to restrict to campus.
+                        </p>
+                      </div>
+                    </div>
                   )}
-                >
-                  <div
-                    className={cn(
-                      'h-10 w-10 rounded-xl flex items-center justify-center shrink-0',
-                      isConfigured ? 'bg-emerald-500/20' : 'bg-amber-500/15',
-                    )}
-                  >
-                    {isConfigured
-                      ? <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-                      : <AlertTriangle className="h-5 w-5 text-amber-400" />}
-                  </div>
-                  <div>
-                    <p className={cn('font-bold text-sm', isConfigured ? 'text-emerald-400' : 'text-amber-400')}>
-                      {isConfigured ? 'Geolocation is active' : 'Geolocation not configured'}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {isConfigured
-                        ? `Teachers within ${school.geo_radius_meters ?? 300} m of this school can sign the logbook.`
-                        : 'Set the coordinates below to enable geo-validation for teachers.'}
-                    </p>
-                    {isConfigured && (
-                      <p className="text-[11px] font-mono mt-2 text-muted-foreground">
-                        {school.latitude?.toFixed(6)}, {school.longitude?.toFixed(6)}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
 
-              {/* ── School name (read-only) ──────────────── */}
-              {school?.name && (
-                <motion.div variants={fadeUp}>
-                  <div className="px-4 py-3 rounded-xl bg-white/4 border border-white/8 text-sm">
-                    <span className="text-muted-foreground text-xs uppercase tracking-widest font-bold">School</span>
-                    <p className="font-bold mt-1">{school.name}</p>
-                    {school.city && (
-                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                        <MapPin className="h-3 w-3" /> {school.city}
+                  {/* School info strip */}
+                  {school?.name && (
+                    <motion.div variants={fadeUp}>
+                      <div className="px-4 py-3 rounded-xl bg-white/4 border border-white/8 flex items-center gap-3">
+                        <MapPin className="h-4 w-4 text-indigo-400 shrink-0" />
+                        <div>
+                          <p className="font-bold text-sm">{school.name}</p>
+                          {school.city && <p className="text-xs text-muted-foreground">{school.city}</p>}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* Form card */}
+                  <div className="glass rounded-2xl p-6 space-y-5">
+
+                    {/* Form header + GPS button */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-2 rounded-xl bg-indigo-500/15">
+                          <MapPin className="h-4 w-4 text-indigo-400" />
+                        </div>
+                        <h2 className="font-bold">
+                          {editMode && isConfigured ? 'Edit location' : 'Set school location'}
+                        </h2>
+                      </div>
+
+                      <button
+                        onClick={handleLocateMe}
+                        disabled={locating}
+                        className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold border border-indigo-500/30 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/15 transition-all disabled:opacity-60"
+                      >
+                        {locating
+                          ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Locating…</>
+                          : <><Navigation className="h-3.5 w-3.5" /> Use my location</>}
+                      </button>
+                    </div>
+
+                    {/* Coordinate inputs */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Latitude</Label>
+                        <Input
+                          type="number" step="any"
+                          placeholder="e.g. 3.8480"
+                          value={lat}
+                          onChange={e => setLat(e.target.value)}
+                          className="h-11 bg-white/5 border-white/10 rounded-xl focus:border-indigo-500/50 font-mono text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Longitude</Label>
+                        <Input
+                          type="number" step="any"
+                          placeholder="e.g. 11.5021"
+                          value={lng}
+                          onChange={e => setLng(e.target.value)}
+                          className="h-11 bg-white/5 border-white/10 rounded-xl focus:border-indigo-500/50 font-mono text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Radius */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                        Allowed radius (metres)
+                      </Label>
+                      <Input
+                        type="number" min="50" max="5000" step="50"
+                        value={radius}
+                        onChange={e => setRadius(e.target.value)}
+                        className="h-11 bg-white/5 border-white/10 rounded-xl focus:border-indigo-500/50"
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Recommended: 100 – 500 m. Minimum 50 m.
                       </p>
-                    )}
+                    </div>
+
+                    {/* Info note */}
+                    <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-white/4 border border-white/8 text-xs text-muted-foreground">
+                      <Info className="h-3.5 w-3.5 shrink-0 mt-0.5 text-indigo-400" />
+                      <span>
+                        Leave latitude and longitude blank to disable enforcement — teachers can sign from anywhere.
+                        <br />
+                        <span className="text-indigo-400 font-semibold mt-1 block">
+                          Run once in Supabase:{' '}
+                          <code className="font-mono">
+                            ALTER TABLE schools ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION, ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION, ADD COLUMN IF NOT EXISTS geo_radius_meters INTEGER DEFAULT 300;
+                          </code>
+                        </span>
+                      </span>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className={cn('grid gap-3', editMode && isConfigured ? 'grid-cols-2' : 'grid-cols-1')}>
+                      {/* Cancel — only shown when editing existing config */}
+                      {editMode && isConfigured && (
+                        <button
+                          onClick={handleCancelEdit}
+                          className="py-3.5 rounded-2xl font-bold text-sm border border-white/15 bg-white/5 hover:bg-white/10 transition-all flex items-center justify-center gap-2"
+                        >
+                          <X className="h-4 w-4" /> Cancel
+                        </button>
+                      )}
+
+                      {/* Save */}
+                      <button
+                        onClick={handleSave}
+                        disabled={saving}
+                        className="py-3.5 rounded-2xl font-bold text-sm text-white flex items-center justify-center gap-2 transition-all active:scale-[0.97] disabled:opacity-60"
+                        style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', boxShadow: '0 6px 20px rgba(99,102,241,0.3)' }}
+                      >
+                        {saving
+                          ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</>
+                          : <><Save className="h-4 w-4" /> Save settings</>}
+                      </button>
+                    </div>
                   </div>
                 </motion.div>
               )}
 
-              {/* ── Coordinates form ─────────────────────── */}
-              <motion.div variants={fadeUp} className="glass rounded-2xl p-6 space-y-5">
-
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-2 rounded-xl bg-indigo-500/15">
-                      <MapPin className="h-4.5 w-4.5 text-indigo-400" />
-                    </div>
-                    <h2 className="font-bold">
-                      {t('schoolLocation') || 'School Location'}
-                    </h2>
-                  </div>
-
-                  {/* Use current location button */}
-                  <button
-                    onClick={handleLocateMe}
-                    disabled={locating}
-                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold border border-indigo-500/30 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/15 transition-all disabled:opacity-60"
-                  >
-                    {locating
-                      ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Locating…</>
-                      : <><Navigation className="h-3.5 w-3.5" /> Use my location</>}
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                      Latitude
-                    </Label>
-                    <Input
-                      type="number"
-                      step="any"
-                      placeholder="e.g. 3.8480"
-                      value={lat}
-                      onChange={(e) => setLat(e.target.value)}
-                      className="h-11 bg-white/5 border-white/10 rounded-xl focus:border-indigo-500/50 font-mono text-sm"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                      Longitude
-                    </Label>
-                    <Input
-                      type="number"
-                      step="any"
-                      placeholder="e.g. 11.5021"
-                      value={lng}
-                      onChange={(e) => setLng(e.target.value)}
-                      className="h-11 bg-white/5 border-white/10 rounded-xl focus:border-indigo-500/50 font-mono text-sm"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                    Allowed radius (metres)
-                  </Label>
-                  <Input
-                    type="number"
-                    min="50"
-                    max="5000"
-                    step="50"
-                    value={radius}
-                    onChange={(e) => setRadius(e.target.value)}
-                    className="h-11 bg-white/5 border-white/10 rounded-xl focus:border-indigo-500/50"
-                  />
-                  <p className="text-[11px] text-muted-foreground">
-                    Teachers must be within this distance of the school to sign the logbook.
-                    Recommended: 100 – 500 m.
-                  </p>
-                </div>
-
-                {/* Info note */}
-                <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-white/4 border border-white/8 text-xs text-muted-foreground">
-                  <Info className="h-3.5 w-3.5 shrink-0 mt-0.5 text-indigo-400" />
-                  <span>
-                    Leave latitude and longitude blank to disable geolocation enforcement —
-                    teachers will be able to sign logbooks from anywhere.
-                    <br />
-                    <span className="text-indigo-400 font-semibold mt-1 block">
-                      SQL required once:{' '}
-                      <code className="font-mono">
-                        ALTER TABLE schools ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION,
-                        ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION,
-                        ADD COLUMN IF NOT EXISTS geo_radius_meters INTEGER DEFAULT 300;
-                      </code>
-                    </span>
-                  </span>
-                </div>
-
-                {/* Save button */}
-                <button
-                  onClick={handleSave}
-                  disabled={saving || !hasUnsavedChanges}
-                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm text-white transition-all active:scale-[0.97] disabled:opacity-50"
-                  style={{
-                    background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
-                    boxShadow: '0 6px 20px rgba(99,102,241,0.3)',
-                  }}
-                >
-                  {saving
-                    ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</>
-                    : <><Save className="h-4 w-4" /> {t('save') || 'Save settings'}</>}
-                </button>
-              </motion.div>
-
-            </motion.div>
+            </AnimatePresence>
           )}
         </div>
       </PageTransition>
