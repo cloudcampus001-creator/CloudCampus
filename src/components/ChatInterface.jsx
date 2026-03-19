@@ -145,15 +145,50 @@ const ChatInterface = ({ currentUserRole, currentUserId, currentUserName, relate
       toast({ title: "Error", description: "User session not found. Please refresh." });
       return;
     }
+    // Guard: schoolId must be a real positive integer for the RPC to work
+    const schoolId = relatedContext?.schoolId;
+    if (!schoolId || !Number.isFinite(schoolId) || schoolId <= 0) {
+      toast({ variant: 'destructive', title: "Error", description: "School not identified. Please log out and log in again." });
+      return;
+    }
     setContactsLoading(true);
     try {
-      const { data, error } = await supabase.rpc('get_chat_contacts', {
-        p_school_id: relatedContext?.schoolId || 0,
+      // Primary: call the RPC
+      const { data: rpcData, error } = await supabase.rpc('get_chat_contacts', {
+        p_school_id: schoolId,
         p_user_role: currentUserRole,
-        p_user_id: String(currentUserId)
+        p_user_id:   String(currentUserId),
       });
       if (error) throw error;
-      setContacts(data || []);
+
+      let contacts = rpcData || [];
+
+      // Fallback for parents: if the RPC returned no administrator contacts,
+      // directly query the administrators table so every parent can always
+      // reach administration regardless of class assignment.
+      if (currentUserRole === 'parent') {
+        const hasAdmin = contacts.some(c => c.contact_role === 'administrator');
+        if (!hasAdmin) {
+          const { data: admins } = await supabase
+            .from('administrators')
+            .select('id, name')
+            .eq('school_id', schoolId);
+
+          const adminContacts = (admins || []).map(a => ({
+            contact_id:       String(a.id),
+            contact_role:     'administrator',
+            display_name:     a.name,
+            group_name:       'Administration',
+            sort_order:       1,
+            my_display_name:  currentUserName || 'Parent',
+          }));
+
+          // Merge: put admins first, then any other contacts from the RPC
+          contacts = [...adminContacts, ...contacts];
+        }
+      }
+
+      setContacts(contacts);
     } catch (err) {
       console.error("Contacts fetch error:", err);
       toast({ variant: 'destructive', title: "Error", description: "Could not load contacts." });
