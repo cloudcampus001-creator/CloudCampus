@@ -1,6 +1,6 @@
 import React from 'react';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Users, LogOut, Menu, Cloud, CalendarClock, MessageSquare, School, BookMarked, MapPin } from 'lucide-react';
+import { Home, Users, LogOut, Menu, Cloud, CalendarClock, MessageSquare, School, BookMarked, MapPin, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
@@ -17,7 +17,8 @@ import AdminTimetablePage from '@/pages/admin/AdminTimetablePage';
 import AdminChatPage from '@/pages/admin/AdminChatPage';
 import AdminClassesPage from '@/pages/admin/AdminClassesPage';
 import AdminSubjectsLibraryPage from '@/pages/admin/AdminSubjectsLibraryPage';
-import AdminSchoolSettingsPage from '@/pages/admin/AdminSchoolSettingsPage';
+import AdminSchoolSettingsPage  from '@/pages/admin/AdminSchoolSettingsPage';
+import AdminReportTemplatePage from '@/pages/admin/AdminReportTemplatePage';
 
 const getInitials = (name = '') => name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'A';
 const ACCENT = { from: 'from-indigo-500', to: 'to-violet-500', glow: 'shadow-indigo-500/40', text: 'text-indigo-400', ring: 'ring-indigo-500/30', mobileActive: 'bg-indigo-500/15', iconGlow: 'drop-shadow-[0_0_8px_rgba(99,102,241,0.9)]' };
@@ -35,6 +36,7 @@ const AdminDashboard = () => {
     { icon: BookMarked,   label: t('adminSubjects'),   path: '/dashboard/administrator/subjects',     shortLabel: t('adminShortSubjects') },
     { icon: CalendarClock,label: t('timetables'),      path: '/dashboard/administrator/timetables',   shortLabel: t('adminShortTime') },
     { icon: MapPin,       label: t('schoolSettings') || 'School Settings', path: '/dashboard/administrator/school', shortLabel: 'Location' },
+    { icon: FileText,     label: 'Report Template',  path: '/dashboard/administrator/report-template', shortLabel: 'Template' },
     { icon: MessageSquare,label: t('systemChat'),      path: '/dashboard/administrator/chat',         shortLabel: t('adminShortChat') },
   ];
   const handleSignOut = async () => { await signOut(); localStorage.clear(); navigate('/'); };
@@ -93,7 +95,8 @@ const AdminDashboard = () => {
           <Route path="/classes"    element={<AdminClassesPage />} />
           <Route path="/timetables" element={<AdminTimetablePage />} />
           <Route path="/subjects"   element={<AdminSubjectsLibraryPage />} />
-          <Route path="/school"     element={<AdminSchoolSettingsPage />} />
+          <Route path="/school"           element={<AdminSchoolSettingsPage />} />
+          <Route path="/report-template"  element={<AdminReportTemplatePage />} />
           <Route path="/chat"       element={<AdminChatPage />} />
           <Route path="*"           element={<AdminHome />} />
         </Routes>

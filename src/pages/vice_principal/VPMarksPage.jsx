@@ -10,7 +10,7 @@ import React, { useState, useEffect } from 'react';
 import {
   FileCheck, Loader2, GraduationCap, Download, Printer,
   RefreshCw, ClipboardList, BookOpen, ChevronDown, ChevronRight,
-  LayoutList, Table2,
+  LayoutList, Table2, Send, Users,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -166,7 +166,7 @@ function exportCSV(cards, allSubjects, className, selectedSeqs) {
   a.click();
 }
 
-function printCards(cards, allSubjects, className, selectedSeqs, schoolName) {
+function printCards(cards, allSubjects, className, selectedSeqs, schoolName, template = {}) {
   const period = selectedSeqs.join(' + '), total = cards.length;
   const cardsHtml = cards.map(student => {
     const rows = allSubjects.map(sub => {
@@ -182,7 +182,12 @@ function printCards(cards, allSubjects, className, selectedSeqs, schoolName) {
     const decColor = student.average == null ? '#6b7280' : student.average >= 10 ? '#15803d' : '#dc2626';
     const sumW = student.subjectRows.filter(r => r.offered && r.weighted !== null).reduce((s, r) => s + r.weighted, 0).toFixed(2);
     return `<div class="card">
-      <div class="hdr"><div class="school">${schoolName || 'CloudCampus School'}</div><div class="sub">ACADEMIC REPORT CARD</div>
+      <div class="hdr">
+        ${template.logo_url ? `<img src="${template.logo_url}" alt="logo" style="height:56px;object-fit:contain;display:block;margin:0 auto 6px;">` : ''}
+        <div class="school" style="color:${template.accent_color || '#7c3aed'}">${template.school_name || schoolName || 'CloudCampus School'}</div>
+        ${template.motto ? `<div class="motto">«${template.motto}»</div>` : ''}
+        ${template.address ? `<div class="addr">${template.address}</div>` : ''}
+        <div class="sub">ACADEMIC REPORT CARD</div>
         <div class="meta"><span><b>Student:</b> ${student.name}</span><span><b>Class:</b> ${className}</span><span><b>Period:</b> ${period}</span><span><b>Date:</b> ${new Date().toLocaleDateString()}</span></div></div>
       <table><thead><tr><th>Subject</th><th>Coef</th><th>Mark /20</th><th>Weighted</th></tr></thead><tbody>${rows}</tbody>
       <tfoot>
@@ -190,18 +195,20 @@ function printCards(cards, allSubjects, className, selectedSeqs, schoolName) {
         <tr class="tot"><td colspan="2"><b>Class Rank</b></td><td colspan="2" class="c">${ordinal(student.rank)} / ${total}</td></tr>
         <tr class="tot"><td colspan="2"><b>Decision</b></td><td colspan="2" class="c" style="color:${decColor};font-weight:700">${decision}</td></tr>
       </tfoot></table>
-      <div class="sigs"><span>Class Teacher: ____________________</span><span>Vice Principal: ____________________</span><span>Parent: ____________________</span></div>
+      <div class="sigs"><span>Class Teacher: ____________________</span>${template.principal ? `<span>Principal: ${template.principal}</span>` : '<span>Vice Principal: ____________________</span>'}<span>Parent: ____________________</span></div>
     </div>`;
   }).join('');
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Report Cards</title>
   <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',Arial,sans-serif;font-size:12px;color:#1f2937}
   .card{max-width:700px;margin:0 auto;padding:28px;page-break-after:always}.card:last-child{page-break-after:avoid}
-  .hdr{text-align:center;border-bottom:3px solid #7c3aed;padding-bottom:14px;margin-bottom:16px}
-  .school{font-size:17px;font-weight:800;color:#7c3aed;letter-spacing:1px;text-transform:uppercase}
+  .hdr{text-align:center;border-bottom:3px solid ${template.accent_color||'#7c3aed'};padding-bottom:14px;margin-bottom:16px}
+  .school{font-size:17px;font-weight:800;letter-spacing:1px;text-transform:uppercase}
+  .motto{font-size:11px;font-style:italic;color:#6b7280;margin-top:3px}
+  .addr{font-size:10px;color:#9ca3af;margin-top:4px}
   .sub{font-size:11px;font-weight:700;color:#374151;margin-top:3px;letter-spacing:3px;text-transform:uppercase}
   .meta{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px;margin-top:10px;font-size:11px}
   table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #d1d5db;padding:6px 9px}
-  thead tr{background:#7c3aed;color:#fff}tbody tr:nth-child(even){background:#f8fafc}tfoot .tot{background:#faf5ff}
+  thead tr{background:${template.accent_color||'#7c3aed'};color:#fff}tbody tr:nth-child(even){background:#f8fafc}tfoot .tot{background:#faf5ff}
   .c{text-align:center}.sigs{display:flex;justify-content:space-between;margin-top:22px;font-size:10px;color:#6b7280;flex-wrap:wrap;gap:8px}
   @media print{@page{size:A4;margin:1.4cm}}</style></head><body>${cardsHtml}</body></html>`;
   const w = window.open('', '_blank');
@@ -360,6 +367,12 @@ const VPMarksPage = ({ selectedClass }) => {
   const [className,    setClassName]    = useState('');
   const [generated,    setGenerated]    = useState(false);
 
+  /* report card template from admin */
+  const [template,     setTemplate]     = useState({});
+  /* distribute state */
+  const [distributing, setDistributing] = useState(false);
+  const [distProgress, setDistProgress] = useState({ done: 0, total: 0 });
+
   useEffect(() => {
     if (!selectedClass) return;
     setGenerated(false); setReportCards([]);
@@ -373,6 +386,21 @@ const VPMarksPage = ({ selectedClass }) => {
       } finally { setMarksLoading(false); }
       const { data: cls } = await supabase.from('classes').select('name').eq('id', parseInt(selectedClass)).single();
       if (cls) setClassName(cls.name);
+
+      /* fetch report template from school */
+      if (schoolId) {
+        const { data: sch } = await supabase.from('schools')
+          .select('name, report_school_name, report_motto, report_address, report_principal, report_logo_url, report_accent_color')
+          .eq('id', parseInt(schoolId)).maybeSingle();
+        if (sch) setTemplate({
+          school_name:  sch.report_school_name  || sch.name || '',
+          motto:        sch.report_motto        || '',
+          address:      sch.report_address      || '',
+          principal:    sch.report_principal    || '',
+          logo_url:     sch.report_logo_url     || '',
+          accent_color: sch.report_accent_color || '#7c3aed',
+        });
+      }
     })();
   }, [selectedClass]);
 
@@ -393,6 +421,60 @@ const VPMarksPage = ({ selectedClass }) => {
     } catch (err) {
       toast({ variant: 'destructive', title: t('error'), description: err.message });
     } finally { setGenerating(false); }
+  };
+
+  /* ── distribute: send each student's report card to their parent ── */
+  const handleDistribute = async () => {
+    if (!reportCards.length) return;
+    const vpName  = localStorage.getItem('userName') || 'Vice Principal';
+    const period  = selectedSeqs.join(' + ');
+    const total   = reportCards.length;
+    setDistributing(true);
+    setDistProgress({ done: 0, total });
+    let sent = 0;
+
+    try {
+      // Build notifications in batch — one per student
+      const notifications = reportCards.map(student => {
+        const graded   = student.subjectRows.filter(r => r.offered && r.markOn20 !== null);
+        const lines    = graded.map(r => `• ${r.subject}: ${r.markOn20.toFixed(2)}/20 (coef ${r.coef})`).join('\n');
+        const avg      = student.average !== null ? student.average.toFixed(2) : '—';
+        const rank     = student.rank ? `${student.rank}${student.rank===1?'st':student.rank===2?'nd':student.rank===3?'rd':'th'} / ${total}` : '—';
+        const decision = student.average !== null ? (student.average >= 10 ? 'PROMOTED ✓' : 'NOT PROMOTED ✗') : '—';
+
+        return {
+          sender_name:  vpName,
+          sender_role:  'vice_principal',
+          title:        `Report card — ${period} · ${className}`,
+          content:      `Your child's results for ${period}:\n\n${lines}\n\n📊 General Average: ${avg}/20\n🏅 Class Rank: ${rank}\n📋 Decision: ${decision}`,
+          target_type:  'parent',
+          target_id:    student.matricule,
+          school_id:    parseInt(schoolId),
+          created_at:   new Date().toISOString(),
+        };
+      });
+
+      // Insert in chunks of 20 to stay within Supabase request limits
+      const CHUNK = 20;
+      for (let i = 0; i < notifications.length; i += CHUNK) {
+        const chunk = notifications.slice(i, i + CHUNK);
+        const { error } = await supabase.from('notifications').insert(chunk);
+        if (error) throw error;
+        sent += chunk.length;
+        setDistProgress({ done: sent, total });
+      }
+
+      toast({
+        title: `✓ Distributed to ${sent} parents`,
+        description: `Each parent can now see their child's ${period} results in their notification feed.`,
+        className: 'bg-green-500/10 border-green-500/50 text-green-400',
+      });
+    } catch (err) {
+      toast({ variant: 'destructive', title: 'Distribution failed', description: err.message });
+    } finally {
+      setDistributing(false);
+      setDistProgress({ done: 0, total: 0 });
+    }
   };
 
   /* Empty state */
@@ -542,9 +624,17 @@ const VPMarksPage = ({ selectedClass }) => {
                           className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-all">
                           <Download className="h-3.5 w-3.5" /> {t('downloadCSV')}
                         </button>
-                        <button onClick={() => printCards(reportCards, allSubjects, className, selectedSeqs, schoolName)}
+                        <button onClick={() => printCards(reportCards, allSubjects, className, selectedSeqs, schoolName, template)}
                           className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20 transition-all">
                           <Printer className="h-3.5 w-3.5" /> {t('printPDF')}
+                        </button>
+                        <button
+                          onClick={handleDistribute}
+                          disabled={distributing}
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-purple-500/10 border border-purple-500/30 text-purple-400 hover:bg-purple-500/20 transition-all disabled:opacity-50">
+                          {distributing
+                            ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> {distProgress.done}/{distProgress.total}</>
+                            : <><Send className="h-3.5 w-3.5" /> Distribute to parents</>}
                         </button>
                       </div>
                     </div>
