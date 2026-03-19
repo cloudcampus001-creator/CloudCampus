@@ -1,214 +1,418 @@
 /**
  * DisciplineNotificationsPage.jsx
- * Full-page notifications feed for the Discipline Master,
- * matching the design of Teacher/VP notifications pages.
- * Orange/red brand accent, realtime subscription, read-state tracking.
+ * Rebuilt to match the Teacher / VP notification pages exactly.
+ * Orange / red accent, clickable timeline grouped by day,
+ * GlassPopup detail sheet, realtime subscription, mark-as-read on mount.
  */
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, Info, CheckCheck, Calendar, Sparkles, Filter } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
+import { Bell, Shield, Users, Info, Paperclip, ExternalLink } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { Helmet } from 'react-helmet';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
+import PageTransition from '@/components/PageTransition';
+import GlassPopup from '@/components/GlassPopup';
+import { NotifSkeleton } from '@/components/Skeletons';
 
-const stagger = { hidden: {}, visible: { transition: { staggerChildren: 0.06, delayChildren: 0.05 } } };
-const fadeUp  = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transition: { duration: 0.32, ease: 'easeOut' } } };
-
-const Skel = () => (
-  <div className="animate-pulse flex gap-3.5 p-4 rounded-2xl bg-white/4 border border-white/5">
-    <div className="h-10 w-10 rounded-xl bg-white/8 shrink-0" />
-    <div className="flex-1 space-y-2 pt-1">
-      <div className="h-4 w-2/3 bg-white/8 rounded-lg" />
-      <div className="h-3 w-full bg-white/5 rounded-lg" />
-      <div className="h-3 w-1/3 bg-white/5 rounded-lg" />
-    </div>
-  </div>
-);
-
-const TARGET_LABELS = {
-  school:           { label: 'School-wide', color: '#f97316' },
-  discipline_master:{ label: 'Discipline',  color: '#ef4444' },
-  staff:            { label: 'Staff',        color: '#f59e0b' },
-  teacher:          { label: 'Teachers',     color: '#10b981' },
-  vice_principal:   { label: 'VP',           color: '#a855f7' },
+/* ── date helpers ───────────────────────────────────────── */
+const formatDay = (d) => {
+  const date = new Date(d);
+  const now  = new Date();
+  const diff = Math.floor((now - date) / 86400000);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  return date.toLocaleDateString(undefined, {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  });
 };
 
-const DisciplineNotificationsPage = () => {
-  const { t, lang }  = useLanguage();
-  const userId       = localStorage.getItem('userId');
-  const schoolId     = localStorage.getItem('schoolId');
-  const READ_KEY     = `notif_read_at_discipline_${schoolId}_${userId}`;
+const formatTime = (d) => {
+  const date = new Date(d);
+  const diff = new Date() - date;
+  if (diff < 60000)    return 'Just now';
+  if (diff < 3600000)  return `${Math.floor(diff / 60000)}m ago`;
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+};
 
+const groupByDay = (items) => {
+  const map = {};
+  items.forEach((n) => {
+    const key = formatDay(n.created_at);
+    if (!map[key]) map[key] = [];
+    map[key].push(n);
+  });
+  return Object.entries(map);
+};
+
+/* ── type → style mapping ───────────────────────────────── */
+const TYPE_STYLE = {
+  school: {
+    icon: Bell, dot: 'bg-orange-500', ring: 'ring-orange-500/30',
+    label: 'School-wide',
+    cls: 'bg-orange-500/15 text-orange-400 border-orange-500/25',
+  },
+  discipline_master: {
+    icon: Shield, dot: 'bg-red-500', ring: 'ring-red-500/30',
+    label: 'Personal',
+    cls: 'bg-red-500/15 text-red-400 border-red-500/25',
+  },
+  staff: {
+    icon: Users, dot: 'bg-amber-500', ring: 'ring-amber-500/30',
+    label: 'Staff',
+    cls: 'bg-amber-500/15 text-amber-400 border-amber-500/25',
+  },
+  default: {
+    icon: Info, dot: 'bg-orange-500', ring: 'ring-orange-500/30',
+    label: 'General',
+    cls: 'bg-orange-500/15 text-orange-400 border-orange-500/25',
+  },
+};
+
+const typeStyle = (n) => TYPE_STYLE[n.target_type] ?? TYPE_STYLE.default;
+
+/* ── animation presets ──────────────────────────────────── */
+const stagger = { hidden: {}, visible: { transition: { staggerChildren: 0.05 } } };
+const fadeUp  = {
+  hidden:  { opacity: 0, y: 12 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.3 } },
+};
+
+/* ═══════════════════════════════════════════════════════════ */
+const DisciplineNotificationsPage = () => {
+  const { t }      = useLanguage();
   const [notifs,   setNotifs]   = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [filter,   setFilter]   = useState('all');
-  const [readAt,   setReadAt]   = useState(() => localStorage.getItem(READ_KEY));
+  const [selected, setSelected] = useState(null);
 
-  const markAllRead = () => {
-    const now = new Date().toISOString();
-    localStorage.setItem(READ_KEY, now);
-    setReadAt(now);
-  };
+  const userId   = localStorage.getItem('userId');
+  const schoolId = localStorage.getItem('schoolId');
 
-  const fetchNotifs = async () => {
-    setLoading(true);
-    const { data } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('school_id', parseInt(schoolId))
-      .or('target_type.eq.school,target_type.eq.discipline_master,target_type.eq.staff')
-      .order('created_at', { ascending: false });
-    setNotifs(data || []);
-    setLoading(false);
-  };
-
-  useEffect(() => { fetchNotifs(); }, []);
-
-  // Realtime
+  /* ── fetch ──────────────────────────────────────────── */
   useEffect(() => {
-    const channel = supabase.channel(`dm_notifs_page_${schoolId}`)
-      .on('postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `school_id=eq.${parseInt(schoolId)}` },
-        payload => setNotifs(prev => [payload.new, ...prev])
-      ).subscribe();
-    return () => supabase.removeChannel(channel);
-  }, [schoolId]);
+    if (!schoolId) return;
+    (async () => {
+      setLoading(true);
+      const { data } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('school_id', parseInt(schoolId))
+        .order('created_at', { ascending: false });
 
-  const unreadCount = notifs.filter(n => !readAt || new Date(n.created_at) > new Date(readAt)).length;
+      // Keep only notifications relevant to discipline master role
+      const relevant = (data || []).filter(
+        (n) =>
+          n.target_type === 'school' ||
+          n.target_type === 'staff' ||
+          (n.target_type === 'discipline_master' &&
+            String(n.target_id) === String(userId)),
+      );
+      setNotifs(relevant);
+      setLoading(false);
+    })();
+  }, [schoolId, userId]);
 
-  const filtered = filter === 'unread'
-    ? notifs.filter(n => !readAt || new Date(n.created_at) > new Date(readAt))
-    : notifs;
+  /* ── mark all as read on mount ──────────────────────── */
+  useEffect(() => {
+    if (!schoolId || !userId) return;
+    const key = `notif_read_at_discipline_${schoolId}_${userId}`;
+    localStorage.setItem(key, new Date().toISOString());
+  }, [schoolId, userId]);
 
-  const isUnread = (n) => !readAt || new Date(n.created_at) > new Date(readAt);
+  /* ── realtime ───────────────────────────────────────── */
+  useEffect(() => {
+    if (!schoolId) return;
+    const ch = supabase
+      .channel(`dm_notifs_page_${schoolId}_${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event:  'INSERT',
+          schema: 'public',
+          table:  'notifications',
+          filter: `school_id=eq.${parseInt(schoolId)}`,
+        },
+        ({ new: n }) => {
+          const ok =
+            n.target_type === 'school' ||
+            n.target_type === 'staff' ||
+            (n.target_type === 'discipline_master' &&
+              String(n.target_id) === String(userId));
+          if (ok) setNotifs((prev) => [n, ...prev]);
+        },
+      )
+      .subscribe();
+    return () => supabase.removeChannel(ch);
+  }, [schoolId, userId]);
 
+  /* ── filter counts ──────────────────────────────────── */
+  const schoolCount   = notifs.filter((n) => n.target_type === 'school').length;
+  const staffCount    = notifs.filter((n) => n.target_type === 'staff').length;
+  const personalCount = notifs.filter((n) => n.target_type === 'discipline_master').length;
+
+  const FILTERS = [
+    { id: 'all',               label: t('all'),       count: notifs.length    },
+    { id: 'school',            label: 'School-wide',  count: schoolCount,    hidden: schoolCount === 0    },
+    { id: 'staff',             label: 'Staff',         count: staffCount,     hidden: staffCount === 0     },
+    { id: 'discipline_master', label: 'Personal',      count: personalCount,  hidden: personalCount === 0  },
+  ].filter((f) => !f.hidden);
+
+  const visible = filter === 'all'
+    ? notifs
+    : notifs.filter((n) => n.target_type === filter);
+
+  const grouped = groupByDay(visible);
+
+  /* ── render ─────────────────────────────────────────── */
   return (
     <>
-      <Helmet><title>Notifications · Discipline</title></Helmet>
+      <Helmet>
+        <title>{t('notifications')} · Discipline · CloudCampus</title>
+      </Helmet>
 
-      <div className="space-y-7 pb-6">
+      <PageTransition>
+        <div className="max-w-3xl mx-auto space-y-6">
 
-        {/* Header */}
-        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <Sparkles className="h-4 w-4 text-orange-400" />
-              <span>{t('dmReceivedNotifs')}</span>
-            </div>
-            <h1 className="text-3xl font-black tracking-tight">{t('notifications') || 'Notifications'}</h1>
-            <p className="text-muted-foreground text-sm">{t('dmReceivedNotifsDesc')}</p>
-          </div>
-
-          {unreadCount > 0 && (
-            <motion.button initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
-              onClick={markAllRead}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-orange-500/30 bg-orange-500/10 text-orange-400 text-sm font-bold hover:bg-orange-500/15 transition-all shrink-0 self-start sm:self-auto">
-              <CheckCheck className="h-4 w-4" />
-              Mark all read
-            </motion.button>
-          )}
-        </motion.div>
-
-        {/* Stats strip */}
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}
-          className="grid grid-cols-2 gap-3">
-          <div className="glass rounded-2xl p-4 border border-white/8 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-orange-500/15 border border-orange-500/20 flex items-center justify-center">
-              <Bell className="h-5 w-5 text-orange-400" />
-            </div>
-            <div>
-              <p className="text-2xl font-black">{notifs.length}</p>
-              <p className="text-xs text-muted-foreground">Total</p>
-            </div>
-          </div>
-          <div className={cn('glass rounded-2xl p-4 border flex items-center gap-3',
-            unreadCount > 0 ? 'border-orange-500/25 bg-orange-500/6' : 'border-white/8')}>
-            <div className={cn('h-10 w-10 rounded-xl flex items-center justify-center',
-              unreadCount > 0 ? 'bg-orange-500/20 border border-orange-500/30' : 'bg-white/5 border border-white/10')}>
-              <span className={cn('text-lg font-black', unreadCount > 0 ? 'text-orange-400' : 'text-muted-foreground')}>
-                {unreadCount}
-              </span>
-            </div>
-            <div>
-              <p className="text-2xl font-black">{unreadCount}</p>
-              <p className="text-xs text-muted-foreground">Unread</p>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Filter pills */}
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.12 }}
-          className="flex gap-2">
-          {[
-            { key: 'all',    label: 'All' },
-            { key: 'unread', label: `Unread ${unreadCount > 0 ? `(${unreadCount})` : ''}` },
-          ].map(pill => (
-            <button key={pill.key} onClick={() => setFilter(pill.key)}
-              className={cn('px-4 py-2 rounded-full text-sm font-semibold border transition-all',
-                filter === pill.key
-                  ? 'bg-orange-500/15 border-orange-500/40 text-orange-300'
-                  : 'bg-white/5 border-white/10 text-muted-foreground hover:border-white/20')}>
-              {pill.label}
-            </button>
-          ))}
-        </motion.div>
-
-        {/* Notification list */}
-        {loading ? (
-          <div className="space-y-3">
-            {[1,2,3,4,5].map(i => <Skel key={i} />)}
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-4 glass rounded-2xl border border-white/8">
-            <Bell className="h-12 w-12 text-muted-foreground opacity-15" />
-            <p className="text-muted-foreground">{t('dmNoNotifs')}</p>
-          </div>
-        ) : (
-          <motion.div variants={stagger} initial="hidden" animate="visible" className="space-y-2">
-            {filtered.map((notif, idx) => {
-              const unread = isUnread(notif);
-              const tgt    = TARGET_LABELS[notif.target_type] || { label: notif.target_type, color: '#f97316' };
-              return (
-                <motion.div key={notif.id} variants={fadeUp}
-                  className={cn('flex gap-3.5 p-4 rounded-2xl border transition-all',
-                    unread ? 'bg-orange-500/6 border-orange-500/20' : 'glass border-white/8 hover:border-white/14')}>
-                  {/* Icon */}
-                  <div className="h-10 w-10 rounded-xl shrink-0 flex items-center justify-center mt-0.5"
-                    style={{ background: tgt.color + '18', border: `1px solid ${tgt.color}28` }}>
-                    <Info className="h-4.5 w-4.5" style={{ color: tgt.color }} />
-                  </div>
-
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border"
-                          style={{ background: tgt.color + '15', borderColor: tgt.color + '30', color: tgt.color }}>
-                          {tgt.label}
-                        </span>
-                        {unread && <span className="h-1.5 w-1.5 rounded-full bg-orange-400 animate-pulse" />}
-                      </div>
-                      <span className="text-[11px] text-muted-foreground shrink-0 flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        {new Date(notif.created_at).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-GB')}
-                      </span>
-                    </div>
-                    <p className="font-bold text-sm leading-snug">{notif.title}</p>
-                    <p className="text-sm text-muted-foreground mt-1 leading-relaxed">{notif.content}</p>
-                    {notif.sender_name && (
-                      <p className="text-[11px] text-muted-foreground/60 mt-2 capitalize">
-                        {notif.sender_role} · {notif.sender_name}
-                      </p>
-                    )}
-                  </div>
-                </motion.div>
-              );
-            })}
+          {/* ── Header ─────────────────────────────────── */}
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
+            <h1 className="text-3xl font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-orange-400 to-red-400">
+              {t('notifications')}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              {t('dmReceivedNotifsDesc')}
+            </p>
           </motion.div>
-        )}
-      </div>
+
+          {/* ── Filter pills ────────────────────────────── */}
+          {!loading && notifs.length > 0 && FILTERS.length > 1 && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.1 }}
+              className="flex gap-2 flex-wrap"
+            >
+              {FILTERS.map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => setFilter(f.id)}
+                  className={cn(
+                    'flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-semibold border transition-all duration-200',
+                    filter === f.id
+                      ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white border-transparent shadow-md shadow-orange-500/25'
+                      : 'bg-white/4 border-white/10 text-muted-foreground hover:text-foreground hover:bg-white/8',
+                  )}
+                >
+                  {f.label}
+                  <span
+                    className={cn(
+                      'text-[10px] font-bold px-1.5 py-0.5 rounded-full',
+                      filter === f.id ? 'bg-white/25' : 'bg-white/10',
+                    )}
+                  >
+                    {f.count}
+                  </span>
+                </button>
+              ))}
+            </motion.div>
+          )}
+
+          {/* ── Skeletons ───────────────────────────────── */}
+          {loading && (
+            <div className="space-y-3">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <NotifSkeleton key={i} />
+              ))}
+            </div>
+          )}
+
+          {/* ── Empty state ─────────────────────────────── */}
+          {!loading && visible.length === 0 && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="glass rounded-2xl p-16 flex flex-col items-center text-center gap-4"
+            >
+              <div className="p-5 rounded-3xl bg-white/5">
+                <Bell className="h-10 w-10 text-muted-foreground opacity-30" />
+              </div>
+              <div>
+                <h2 className="font-bold text-base">All caught up</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {t('noNotificationsDesc')}
+                </p>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ── Timeline ────────────────────────────────── */}
+          {!loading &&
+            grouped.map(([day, items]) => (
+              <motion.div
+                key={day}
+                variants={stagger}
+                initial="hidden"
+                animate="visible"
+                className="space-y-2"
+              >
+                {/* Day divider */}
+                <div className="flex items-center gap-3 py-1">
+                  <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                    {day}
+                  </span>
+                  <div className="flex-1 h-px bg-white/8" />
+                </div>
+
+                {/* Notifications with vertical timeline line */}
+                <div className="relative ml-5 space-y-3">
+                  <div className="absolute left-0 top-0 bottom-0 w-px bg-white/8" />
+
+                  {items.map((n) => {
+                    const st = typeStyle(n);
+                    const IconComp = st.icon;
+                    // parse cls to extract individual Tailwind classes safely
+                    const [bgCls, textCls, borderCls] = st.cls.split(' ');
+
+                    return (
+                      <motion.div key={n.id} variants={fadeUp}>
+                        <button
+                          onClick={() => setSelected(n)}
+                          className="relative w-full text-left pl-8 group"
+                        >
+                          {/* Timeline dot */}
+                          <span
+                            className={cn(
+                              'absolute left-0 top-4 -translate-x-1/2 w-3 h-3 rounded-full ring-2 ring-background transition-transform group-hover:scale-125',
+                              st.dot,
+                              st.ring,
+                            )}
+                          />
+
+                          {/* Card */}
+                          <div className="glass rounded-2xl p-4 border border-white/8 hover:border-orange-500/25 hover:bg-white/4 transition-all duration-200 active:scale-[0.99]">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-start gap-3 flex-1 min-w-0">
+                                {/* Icon */}
+                                <div className={cn('p-2 rounded-xl shrink-0 mt-0.5', bgCls)}>
+                                  <IconComp className={cn('h-4 w-4', textCls)} />
+                                </div>
+
+                                {/* Text */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="font-semibold text-sm leading-tight">
+                                      {n.title}
+                                    </p>
+                                    <span
+                                      className={cn(
+                                        'text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0',
+                                        st.cls,
+                                      )}
+                                    >
+                                      {st.label}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
+                                    {n.content}
+                                  </p>
+                                  <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground">
+                                    {n.sender_name && (
+                                      <span>
+                                        {t('notifFrom')}:{' '}
+                                        <span className="font-semibold capitalize">
+                                          {n.sender_name}
+                                        </span>
+                                      </span>
+                                    )}
+                                    {n.file_url && (
+                                      <span className="flex items-center gap-0.5 text-orange-400">
+                                        <Paperclip className="h-2.5 w-2.5" />
+                                        Attachment
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Timestamp */}
+                              <span className="text-[10px] text-muted-foreground shrink-0 mt-0.5">
+                                {formatTime(n.created_at)}
+                              </span>
+                            </div>
+                          </div>
+                        </button>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            ))}
+        </div>
+      </PageTransition>
+
+      {/* ── Detail GlassPopup ────────────────────────────── */}
+      <GlassPopup
+        open={!!selected}
+        onClose={() => setSelected(null)}
+        title={selected?.title}
+        subtitle={
+          selected
+            ? `${t('notifFrom')}: ${selected.sender_name || '—'} · ${new Date(
+                selected.created_at,
+              ).toLocaleDateString(undefined, {
+                day: 'numeric', month: 'long', year: 'numeric',
+              })}`
+            : ''
+        }
+        variant="sheet"
+        maxWidth="max-w-md"
+        footer={
+          selected?.file_url ? (
+            <a
+              href={selected.file_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold shadow-lg shadow-orange-500/25 transition-all active:scale-[0.98]"
+            >
+              <ExternalLink className="h-4 w-4" />
+              {t('notifAttachment')}
+            </a>
+          ) : undefined
+        }
+      >
+        {selected && (() => {
+          const st = typeStyle(selected);
+          return (
+            <div className="space-y-4">
+              {/* Type badge */}
+              <span className={cn('text-xs font-bold px-3 py-1.5 rounded-full border', st.cls)}>
+                {st.label}
+              </span>
+
+              {/* Body */}
+              <div className="p-4 rounded-2xl bg-black/3 dark:bg-white/4">
+                <p className="text-sm text-gray-700 dark:text-gray-200 leading-relaxed whitespace-pre-wrap">
+                  {selected.content}
+                </p>
+              </div>
+
+              {/* Meta */}
+              <div className="flex items-center justify-between text-xs text-gray-400 dark:text-gray-500 px-1">
+                <span className="capitalize">
+                  {selected.sender_role?.replace('_', ' ')}
+                </span>
+                <span>
+                  {new Date(selected.created_at).toLocaleDateString(undefined, {
+                    day: 'numeric', month: 'short', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit',
+                  })}
+                </span>
+              </div>
+            </div>
+          );
+        })()}
+      </GlassPopup>
     </>
   );
 };
