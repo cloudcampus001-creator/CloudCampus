@@ -157,6 +157,32 @@ const MarksPage = () => {
         .eq('assessment_name', selectedSeq).eq('teacher_id', parseInt(teacherId));
       const { error } = await supabase.from('student_marks').insert(marksData);
       if (error) throw error;
+
+      // ── Notify each student's parent ─────────────────────────────────────
+      // Send one notification per student so parents see their child's mark
+      // directly in their notification feed.
+      const teacherName = localStorage.getItem('userName') || 'Teacher';
+      const className = classOptions.find(c => c.id.toString() === selectedClass)?.name || '';
+      try {
+        const notifications = marksData.map(m => {
+          const on20 = ((m.mark / m.total_marks) * 20).toFixed(2);
+          return {
+            sender_name:  teacherName,
+            sender_role:  'teacher',
+            title:        `New mark: ${selectedSubject} — ${selectedSeq}`,
+            content:      `Your child received ${m.mark}/${m.total_marks} (${on20}/20) in ${selectedSubject} for ${selectedSeq}${className ? ` · ${className}` : ''}.`,
+            target_type:  'parent',
+            target_id:    m.student_matricule,
+            school_id:    parseInt(schoolId),
+            created_at:   new Date().toISOString(),
+          };
+        });
+        await supabase.from('notifications').insert(notifications);
+      } catch (notifErr) {
+        // Notification failure must not block the marks save toast
+        console.warn('Could not send mark notifications:', notifErr.message);
+      }
+
       toast({ title: `✓ ${t('success')}`, description: t('marksSaved') });
       setMarks({}); setDupInfo(null); setMissing([]);
     } catch (err) {
