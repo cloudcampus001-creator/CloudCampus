@@ -103,7 +103,6 @@ const ConfiguredCard = ({ school, onEdit, onClear, clearing }) => (
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <MapPin className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
         <span className="font-semibold text-foreground">{school.name}</span>
-        {school.city && <span>· {school.city}</span>}
       </div>
     )}
 
@@ -150,7 +149,7 @@ const AdminSchoolSettingsPage = () => {
       try {
         const { data, error } = await supabase
           .from('schools')
-          .select('id, name, city, latitude, longitude, geo_radius_meters')
+          .select('id, name, latitude, longitude, geo_radius_meters')
           .eq('id', parsedSchoolId)
           .maybeSingle();
 
@@ -237,7 +236,7 @@ const AdminSchoolSettingsPage = () => {
         .from('schools')
         .update(payload)
         .eq('id', parsedSchoolId)
-        .select('id, name, city, latitude, longitude, geo_radius_meters')
+        .select('id, name, latitude, longitude, geo_radius_meters')
         .single();
 
       if (error) throw error;
@@ -276,7 +275,7 @@ const AdminSchoolSettingsPage = () => {
         .from('schools')
         .update({ latitude: null, longitude: null, geo_radius_meters: 300 })
         .eq('id', parsedSchoolId)
-        .select('id, name, city, latitude, longitude, geo_radius_meters')
+        .select('id, name, latitude, longitude, geo_radius_meters')
         .single();
 
       if (error) throw error;
@@ -370,7 +369,7 @@ const AdminSchoolSettingsPage = () => {
                       <MapPin className="h-4 w-4 text-indigo-400 shrink-0" />
                       <div>
                         <p className="font-bold text-sm">{school.name}</p>
-                        {school.city && <p className="text-xs text-muted-foreground">{school.city}</p>}
+
                       </div>
                     </div>
                   )}
