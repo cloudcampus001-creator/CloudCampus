@@ -145,46 +145,93 @@ const ChatInterface = ({ currentUserRole, currentUserId, currentUserName, relate
       toast({ title: "Error", description: "User session not found. Please refresh." });
       return;
     }
-    // Guard: schoolId must be a real positive integer for the RPC to work
     const schoolId = relatedContext?.schoolId;
+    const classId  = relatedContext?.classId;
     if (!schoolId || !Number.isFinite(schoolId) || schoolId <= 0) {
       toast({ variant: 'destructive', title: "Error", description: "School not identified. Please log out and log in again." });
       return;
     }
     setContactsLoading(true);
     try {
-      // Primary: call the RPC
+      // Primary: call the RPC (works for most roles)
       const { data: rpcData, error } = await supabase.rpc('get_chat_contacts', {
         p_school_id: schoolId,
         p_user_role: currentUserRole,
         p_user_id:   String(currentUserId),
       });
       if (error) throw error;
-
       let contacts = rpcData || [];
 
-      // Fallback for parents: if the RPC returned no administrator contacts,
-      // directly query the administrators table so every parent can always
-      // reach administration regardless of class assignment.
+      // ── Parent fallback: always build the full contact list directly ──────
+      // The RPC may return partial/empty results depending on class assignment.
+      // For parents we always guarantee: Admins + VP in charge + DM in charge + Teachers of their class.
       if (currentUserRole === 'parent') {
-        const hasAdmin = contacts.some(c => c.contact_role === 'administrator');
-        if (!hasAdmin) {
-          const { data: admins } = await supabase
-            .from('administrators')
-            .select('id, name')
-            .eq('school_id', schoolId);
+        const hasAdmin   = contacts.some(c => c.contact_role === 'administrator');
+        const hasTeacher = contacts.some(c => c.contact_role === 'teacher');
 
-          const adminContacts = (admins || []).map(a => ({
-            contact_id:       String(a.id),
-            contact_role:     'administrator',
-            display_name:     a.name,
-            group_name:       'Administration',
-            sort_order:       1,
-            my_display_name:  currentUserName || 'Parent',
+        // Only run fallback when the RPC came back missing critical contacts
+        if (!hasAdmin || !hasTeacher) {
+          const builtContacts = [];
+
+          // 1. Administrators (school-wide)
+          const { data: admins } = await supabase
+            .from('administrators').select('id, name').eq('school_id', schoolId);
+          (admins || []).forEach(a => builtContacts.push({
+            contact_id: String(a.id), contact_role: 'administrator',
+            display_name: a.name, group_name: 'Administration',
+            sort_order: 1, my_display_name: currentUserName || 'Parent',
           }));
 
-          // Merge: put admins first, then any other contacts from the RPC
-          contacts = [...adminContacts, ...contacts];
+          // 2. VP and DM in charge of the class
+          if (classId) {
+            const { data: cls } = await supabase
+              .from('classes').select('vp_id, dm_id').eq('id', classId).maybeSingle();
+
+            if (cls?.vp_id) {
+              const { data: vp } = await supabase
+                .from('vice_principals').select('id, name').eq('id', cls.vp_id).maybeSingle();
+              if (vp) builtContacts.push({
+                contact_id: String(vp.id), contact_role: 'vice_principal',
+                display_name: vp.name, group_name: 'Administration',
+                sort_order: 2, my_display_name: currentUserName || 'Parent',
+              });
+            }
+
+            if (cls?.dm_id) {
+              const { data: dm } = await supabase
+                .from('discipline_masters').select('id, name').eq('id', cls.dm_id).maybeSingle();
+              if (dm) builtContacts.push({
+                contact_id: String(dm.id), contact_role: 'discipline',
+                display_name: dm.name, group_name: 'Administration',
+                sort_order: 3, my_display_name: currentUserName || 'Parent',
+              });
+            }
+
+            // 3. Teachers of the class (deduplicated)
+            const { data: timetableRows } = await supabase
+              .from('timetables').select('teacher_id, teachers(id, name), subject')
+              .eq('class_id', classId).eq('school_id', schoolId);
+
+            const seenTeachers = new Set();
+            (timetableRows || []).forEach(row => {
+              const teacher = row.teachers;
+              if (!teacher || seenTeachers.has(teacher.id)) return;
+              seenTeachers.add(teacher.id);
+              builtContacts.push({
+                contact_id: String(teacher.id), contact_role: 'teacher',
+                display_name: teacher.name, group_name: 'Teachers',
+                sort_order: 4, my_display_name: currentUserName || 'Parent',
+              });
+            });
+          }
+
+          // Merge: prefer RPC results when available, fill gaps from direct queries
+          const rpcIds = new Set(contacts.map(c => `${c.contact_role}:${c.contact_id}`));
+          const merged = [
+            ...contacts,
+            ...builtContacts.filter(c => !rpcIds.has(`${c.contact_role}:${c.contact_id}`)),
+          ];
+          contacts = merged;
         }
       }
 
