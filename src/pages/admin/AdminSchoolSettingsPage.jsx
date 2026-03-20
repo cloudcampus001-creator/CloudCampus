@@ -39,7 +39,7 @@ import PageTransition from '@/components/PageTransition';
 import { cn } from '@/lib/utils';
 
 /* ── Configured read-only card ───────────────────────── */
-const ConfiguredCard = ({ school, onEdit, onClear, clearing }) => (
+const ConfiguredCard = ({ school, onEdit, onClear, clearing, t }) => (
   <motion.div
     initial={{ opacity: 0, scale: 0.97 }}
     animate={{ opacity: 1, scale: 1 }}
@@ -339,6 +339,7 @@ const AdminSchoolSettingsPage = () => {
                     onEdit={() => setEditMode(true)}
                     onClear={handleClear}
                     clearing={clearing}
+                    t={t}
                   />
                 </motion.div>
               )}
