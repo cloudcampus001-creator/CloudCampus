@@ -595,8 +595,6 @@ tfoot .tot{background:#faf5ff;font-weight:600}
 
   /* Empty state */
   if (!selectedClass) {
-  /* Empty state */
-  if (!selectedClass) {
     return (
       <PageTransition>
         <div className="flex flex-col items-center justify-center h-[50vh] text-center gap-4">
