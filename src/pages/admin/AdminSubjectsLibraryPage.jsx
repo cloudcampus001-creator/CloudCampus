@@ -219,14 +219,31 @@ const AdminSubjectsLibraryPage = () => {
     setBooks(data || []); setBooksLoading(false);
   }, [sid]);
 
-  /* ── library: upload helper ── */
+  /* ── library: upload helper — tries library_books then library_documents ── */
   const uploadToBucket = async (file, folder) => {
     const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').substring(0, 60);
     const path = `${folder}/${sid}_${Date.now()}_${safe}`;
-    const { error } = await supabase.storage.from(BUCKET).upload(path, file, { upsert: true, contentType: file.type });
-    if (error) throw new Error(`Upload failed: ${error.message}`);
-    const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
-    return { url: urlData.publicUrl, path };
+
+    // Try primary bucket first, then fallback
+    const buckets = ['library_books', 'library_documents'];
+    let lastError = null;
+
+    for (const bucket of buckets) {
+      const { error } = await supabase.storage
+        .from(bucket)
+        .upload(path, file, { upsert: true, contentType: file.type });
+
+      if (!error) {
+        const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path);
+        return { url: urlData.publicUrl, path, bucket };
+      }
+      lastError = error;
+    }
+
+    throw new Error(
+      `Upload failed on all buckets: ${lastError?.message}. ` +
+      `In Supabase Storage → library_books → Policies, add an INSERT policy for the anon role with definition: true`
+    );
   };
 
   /* ── library: add book ── */
