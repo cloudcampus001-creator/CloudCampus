@@ -445,12 +445,12 @@ const AdminSubjectsLibraryPage = () => {
 
                   <div className="space-y-1.5">
                     <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('subjectSelectLabel')}</Label>
-                    <Select value={newBook.subject} onValueChange={v => setNewBook(p => ({ ...p, subject: v }))}>
+                    <Select value={newBook.subject || "__none__"} onValueChange={v => setNewBook(p => ({ ...p, subject: v === "__none__" ? "" : v }))}>
                       <SelectTrigger className="h-11 bg-white/5 border-white/10 rounded-xl">
                         <SelectValue placeholder="— none —" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">— none —</SelectItem>
+                        <SelectItem value="__none__">— none —</SelectItem>
                         {subjects.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
