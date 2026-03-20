@@ -15,7 +15,7 @@
  *
  * Two display modes:
  *  CONFIGURED  — DB row has lat+lng → green card, persists across refreshes
- *  EDIT        — no coords yet OR admin clicked {t('edit')} → form
+ *  EDIT        — no coords yet OR admin clicked Edit → form
  *
  * SQL migration (run once in Supabase SQL editor):
  *   ALTER TABLE schools
@@ -35,12 +35,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useLanguage } from '@/contexts/LanguageContext';
 import PageTransition from '@/components/PageTransition';
 import { cn } from '@/lib/utils';
 
 /* ── Configured read-only card ───────────────────────── */
-const ConfiguredCard = ({ school, on{t('edit')}, onClear, clearing }) => (
+const ConfiguredCard = ({ school, onEdit, onClear, clearing }) => (
   <motion.div
     initial={{ opacity: 0, scale: 0.97 }}
     animate={{ opacity: 1, scale: 1 }}
@@ -61,7 +60,7 @@ const ConfiguredCard = ({ school, on{t('edit')}, onClear, clearing }) => (
         </div>
       </div>
       <button
-        onClick={on{t('edit')}}
+        onClick={onEdit}
         className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold border border-white/15 bg-white/5 hover:bg-white/10 transition-all"
       >
         <Pencil className="h-3.5 w-3.5" /> {t('edit')}
@@ -127,7 +126,7 @@ const AdminSchoolSettingsPage = () => {
   const [loading,      setLoading]      = useState(true);
   const [school,       setSchool]       = useState(null);
   const [isConfigured, setIsConfigured] = useState(false); // set from DB, never derived
-  const [editMode,     set{t('edit')}Mode]     = useState(false);
+  const [editMode,     setEditMode]     = useState(false);
   const [saving,       setSaving]       = useState(false);
   const [clearing,     setClearing]     = useState(false);
   const [locating,     setLocating]     = useState(false);
@@ -158,7 +157,7 @@ const AdminSchoolSettingsPage = () => {
           // Columns may not exist yet — still open the form, but log the error
           console.warn('School settings fetch error (columns may need migration):', error.message);
           setIsConfigured(false);
-          set{t('edit')}Mode(true);
+          setEditMode(true);
           return;
         }
 
@@ -166,7 +165,7 @@ const AdminSchoolSettingsPage = () => {
           // No matching school row
           console.warn('No school row found for id:', parsedSchoolId);
           setIsConfigured(false);
-          set{t('edit')}Mode(true);
+          setEditMode(true);
           return;
         }
 
@@ -174,7 +173,7 @@ const AdminSchoolSettingsPage = () => {
         setSchool(data);
         const configured = data.latitude != null && data.longitude != null;
         setIsConfigured(configured);  // ← ground truth from DB
-        set{t('edit')}Mode(!configured);
+        setEditMode(!configured);
 
         // Pre-fill form fields for if/when admin opens edit mode
         setLat(data.latitude  != null ? String(data.latitude)           : '');
@@ -247,7 +246,7 @@ const AdminSchoolSettingsPage = () => {
       setSchool(saved);
       const nowConfigured = saved.latitude != null && saved.longitude != null;
       setIsConfigured(nowConfigured);
-      set{t('edit')}Mode(!nowConfigured);
+      setEditMode(!nowConfigured);
 
       // Keep form fields in sync with what was saved
       setLat(saved.latitude  != null ? String(saved.latitude)           : '');
@@ -284,7 +283,7 @@ const AdminSchoolSettingsPage = () => {
 
       setSchool(cleared);
       setIsConfigured(false);
-      set{t('edit')}Mode(true);
+      setEditMode(true);
       setLat(''); setLng(''); setRadius('300');
 
       toast({ title: t('geoDisabled'), description: t('geoDisabledDesc') });
@@ -296,12 +295,12 @@ const AdminSchoolSettingsPage = () => {
   };
 
   /* ── cancel edit ────────────────────────────────────── */
-  const handleCancel{t('edit')} = () => {
+  const handleCancelEdit = () => {
     // Restore form to last saved DB values
     setLat(school?.latitude  != null ? String(school.latitude)           : '');
     setLng(school?.longitude != null ? String(school.longitude)          : '');
     setRadius(school?.geo_radius_meters != null ? String(school.geo_radius_meters) : '300');
-    set{t('edit')}Mode(false);
+    setEditMode(false);
   };
 
   /* ── render ─────────────────────────────────────────── */
@@ -338,7 +337,7 @@ const AdminSchoolSettingsPage = () => {
                   exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}>
                   <ConfiguredCard
                     school={school}
-                    on{t('edit')}={() => set{t('edit')}Mode(true)}
+                    onEdit={() => setEditMode(true)}
                     onClear={handleClear}
                     clearing={clearing}
                   />
@@ -382,7 +381,7 @@ const AdminSchoolSettingsPage = () => {
                           <MapPin className="h-4 w-4 text-indigo-400" />
                         </div>
                         <h2 className="font-bold">
-                          {editMode && isConfigured ? '{t('edit')} location' : 'Set school location'}
+                          {editMode && isConfigured ? t('editLocation') : t('setSchoolLocation')}
                         </h2>
                       </div>
                       <button
@@ -436,7 +435,7 @@ const AdminSchoolSettingsPage = () => {
 
                     <div className={cn('grid gap-3', editMode && isConfigured ? 'grid-cols-2' : 'grid-cols-1')}>
                       {editMode && isConfigured && (
-                        <button onClick={handleCancel{t('edit')}}
+                        <button onClick={handleCancelEdit}
                           className="py-3.5 rounded-2xl font-bold text-sm border border-white/15 bg-white/5 hover:bg-white/10 transition-all flex items-center justify-center gap-2">
                           <X className="h-4 w-4" /> {t('cancel')}
                         </button>
