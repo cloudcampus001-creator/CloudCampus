@@ -181,8 +181,7 @@ const MarksPage = () => {
             ``,
             `🇫🇷 Votre enfant a obtenu ${m.mark}/${m.total_marks} (${on20}/20) en ${selectedSubject} · ${selectedSeq}${className ? ` · ${className}` : ''}.`,
             `Appréciation : ${appreciation}`,
-          ].join('
-');
+          ].join('\n');
           return {
             sender_name:  teacherName,
             sender_role:  'teacher',
