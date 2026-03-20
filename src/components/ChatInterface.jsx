@@ -820,7 +820,7 @@ const ChatInterface = ({ currentUserRole, currentUserId, currentUserName, relate
           <DialogHeader className="px-4 pt-4 pb-3 border-b border-white/10 shrink-0">
             <div className="flex items-center justify-between mb-3">
               <DialogTitle className="text-base font-bold">
-                {currentUserRole === 'parent' ? 'Contact Administration' : (t('newChat') || 'New Discussion')}
+                {currentUserRole === 'parent' ? t('contactAdministration') || 'Contact Administration' : (t('newChat') || 'New Discussion')}
               </DialogTitle>
               <Button
                 variant="ghost"

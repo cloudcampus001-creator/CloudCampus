@@ -440,13 +440,13 @@ const VPMarksPage = ({ selectedClass }) => {
         const lines    = graded.map(r => `• ${r.subject}: ${r.markOn20.toFixed(2)}/20 (coef ${r.coef})`).join('\n');
         const avg      = student.average !== null ? student.average.toFixed(2) : '—';
         const rank     = student.rank ? `${student.rank}${student.rank===1?'st':student.rank===2?'nd':student.rank===3?'rd':'th'} / ${total}` : '—';
-        const decision = student.average !== null ? (student.average >= 10 ? 'PROMOTED ✓' : 'NOT PROMOTED ✗') : '—';
+        const decision = student.average !== null ? (student.average >= 10 ? `${t('reportCardPromoted')} ✓` : `${t('reportCardNotPromoted')} ✗`) : '—';
 
         return {
           sender_name:  vpName,
           sender_role:  'vice_principal',
-          title:        `Report card — ${period} · ${className}`,
-          content:      `Your child's results for ${period}:\n\n${lines}\n\n📊 General Average: ${avg}/20\n🏅 Class Rank: ${rank}\n📋 Decision: ${decision}`,
+          title:        `${t('reportCardNotifTitle')} — ${period} · ${className}`,
+          content:      `${t('reportCardNotifTitle')} — ${period}:\n\n${lines}\n\n📊 ${t('reportCardNotifAvg')}: ${avg}/20\n🏅 ${t('reportCardNotifRank')}: ${rank}\n📋 ${t('reportCardNotifDecision')}: ${decision}`,
           target_type:  'parent',
           target_id:    student.matricule,
           school_id:    parseInt(schoolId),
@@ -466,15 +466,15 @@ const VPMarksPage = ({ selectedClass }) => {
       }
 
       toast({
-        title: `✓ Distributed to ${sent} parents`,
-        description: `Each parent can now see their child's ${period} results in their notification feed.`,
+        title: `✓ ${t('distributeBtn')} (${sent})`,
+        description: t('distributeSuccessDesc'),
         className: 'bg-green-500/10 border-green-500/50 text-green-400',
       });
     } catch (err) {
       const hint = err.message?.includes('integer')
         ? 'Run this SQL in Supabase first: ALTER TABLE notifications ALTER COLUMN target_id TYPE TEXT USING target_id::TEXT;'
         : err.message;
-      toast({ variant: 'destructive', title: 'Distribution failed', description: hint });
+      toast({ variant: 'destructive', title: t('distributeFailed'), description: hint });
     } finally {
       setDistributing(false);
       setDistProgress({ done: 0, total: 0 });
@@ -637,8 +637,8 @@ const VPMarksPage = ({ selectedClass }) => {
                           disabled={distributing}
                           className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-purple-500/10 border border-purple-500/30 text-purple-400 hover:bg-purple-500/20 transition-all disabled:opacity-50">
                           {distributing
-                            ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> {distProgress.done}/{distProgress.total}</>
-                            : <><Send className="h-3.5 w-3.5" /> Distribute to parents</>}
+                            ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> {t('distributing')} {distProgress.done}/{distProgress.total}</>
+                            : <><Send className="h-3.5 w-3.5" /> {t('distributeBtn')}</>}
                         </button>
                       </div>
                     </div>

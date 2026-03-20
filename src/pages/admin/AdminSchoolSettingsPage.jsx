@@ -15,7 +15,7 @@
  *
  * Two display modes:
  *  CONFIGURED  — DB row has lat+lng → green card, persists across refreshes
- *  EDIT        — no coords yet OR admin clicked Edit → form
+ *  EDIT        — no coords yet OR admin clicked {t('edit')} → form
  *
  * SQL migration (run once in Supabase SQL editor):
  *   ALTER TABLE schools
@@ -35,11 +35,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import PageTransition from '@/components/PageTransition';
 import { cn } from '@/lib/utils';
 
 /* ── Configured read-only card ───────────────────────── */
-const ConfiguredCard = ({ school, onEdit, onClear, clearing }) => (
+const ConfiguredCard = ({ school, on{t('edit')}, onClear, clearing }) => (
   <motion.div
     initial={{ opacity: 0, scale: 0.97 }}
     animate={{ opacity: 1, scale: 1 }}
@@ -51,19 +52,19 @@ const ConfiguredCard = ({ school, onEdit, onClear, clearing }) => (
           <CheckCircle2 className="h-6 w-6 text-emerald-400" />
         </div>
         <div>
-          <p className="font-black text-base text-emerald-400">Geolocation active</p>
+          <p className="font-black text-base text-emerald-400">{t('geoActive')}</p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Teachers must be within{' '}
+            {t('geoActiveDesc').replace('{n}', school.geo_radius_meters ?? 300) || `Teachers must be within`}{' '}
             <span className="font-bold text-foreground">{school.geo_radius_meters ?? 300} m</span>{' '}
-            of this school to sign the logbook.
+            
           </p>
         </div>
       </div>
       <button
-        onClick={onEdit}
+        onClick={on{t('edit')}}
         className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold border border-white/15 bg-white/5 hover:bg-white/10 transition-all"
       >
-        <Pencil className="h-3.5 w-3.5" /> Edit
+        <Pencil className="h-3.5 w-3.5" /> {t('edit')}
       </button>
     </div>
 
@@ -80,10 +81,10 @@ const ConfiguredCard = ({ school, onEdit, onClear, clearing }) => (
 
     <div className="p-4 rounded-xl bg-white/4 border border-white/8 flex items-center justify-between gap-4">
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 mb-1">Allowed radius</p>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 mb-1">{t('allowedRadius').replace(' (metres)', '')}</p>
         <p className="font-bold text-sm">
           {school.geo_radius_meters ?? 300}{' '}
-          <span className="text-muted-foreground font-normal">metres</span>
+          <span className="text-muted-foreground font-normal">{t('metres')}</span>
         </p>
       </div>
       <div className="flex-1 max-w-[140px]">
@@ -111,7 +112,7 @@ const ConfiguredCard = ({ school, onEdit, onClear, clearing }) => (
       disabled={clearing}
       className="text-xs text-red-400/70 hover:text-red-400 transition-colors underline underline-offset-2 disabled:opacity-50"
     >
-      {clearing ? 'Disabling…' : 'Disable geolocation for this school'}
+      {clearing ? 'Disabling…' : '{t('disableGeo')}'}
     </button>
   </motion.div>
 );
@@ -126,7 +127,7 @@ const AdminSchoolSettingsPage = () => {
   const [loading,      setLoading]      = useState(true);
   const [school,       setSchool]       = useState(null);
   const [isConfigured, setIsConfigured] = useState(false); // set from DB, never derived
-  const [editMode,     setEditMode]     = useState(false);
+  const [editMode,     set{t('edit')}Mode]     = useState(false);
   const [saving,       setSaving]       = useState(false);
   const [clearing,     setClearing]     = useState(false);
   const [locating,     setLocating]     = useState(false);
@@ -157,7 +158,7 @@ const AdminSchoolSettingsPage = () => {
           // Columns may not exist yet — still open the form, but log the error
           console.warn('School settings fetch error (columns may need migration):', error.message);
           setIsConfigured(false);
-          setEditMode(true);
+          set{t('edit')}Mode(true);
           return;
         }
 
@@ -165,7 +166,7 @@ const AdminSchoolSettingsPage = () => {
           // No matching school row
           console.warn('No school row found for id:', parsedSchoolId);
           setIsConfigured(false);
-          setEditMode(true);
+          set{t('edit')}Mode(true);
           return;
         }
 
@@ -173,7 +174,7 @@ const AdminSchoolSettingsPage = () => {
         setSchool(data);
         const configured = data.latitude != null && data.longitude != null;
         setIsConfigured(configured);  // ← ground truth from DB
-        setEditMode(!configured);
+        set{t('edit')}Mode(!configured);
 
         // Pre-fill form fields for if/when admin opens edit mode
         setLat(data.latitude  != null ? String(data.latitude)           : '');
@@ -199,13 +200,13 @@ const AdminSchoolSettingsPage = () => {
         setLng(pos.coords.longitude.toFixed(7));
         setLocating(false);
         toast({
-          title: 'Location captured',
+          title: t('locationCaptured'),
           description: `${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)} · accuracy ±${Math.round(pos.coords.accuracy)} m`,
         });
       },
       (err) => {
         setLocating(false);
-        toast({ variant: 'destructive', title: 'Location denied', description: err.message || 'Could not get GPS position.' });
+        toast({ variant: 'destructive', title: t('locationDenied'), description: err.message || 'Could not get GPS position.' });
       },
       { enableHighAccuracy: true, timeout: 15000 },
     );
@@ -246,7 +247,7 @@ const AdminSchoolSettingsPage = () => {
       setSchool(saved);
       const nowConfigured = saved.latitude != null && saved.longitude != null;
       setIsConfigured(nowConfigured);
-      setEditMode(!nowConfigured);
+      set{t('edit')}Mode(!nowConfigured);
 
       // Keep form fields in sync with what was saved
       setLat(saved.latitude  != null ? String(saved.latitude)           : '');
@@ -254,7 +255,7 @@ const AdminSchoolSettingsPage = () => {
       setRadius(saved.geo_radius_meters != null ? String(saved.geo_radius_meters) : '300');
 
       toast({
-        title: '✓ Settings saved',
+        title: `✓ ${t('settingsSaved')}`,
         description: nowConfigured
           ? `School location set · radius ${parsedRadius} m`
           : 'Geolocation disabled for this school.',
@@ -283,10 +284,10 @@ const AdminSchoolSettingsPage = () => {
 
       setSchool(cleared);
       setIsConfigured(false);
-      setEditMode(true);
+      set{t('edit')}Mode(true);
       setLat(''); setLng(''); setRadius('300');
 
-      toast({ title: 'Geolocation disabled', description: 'Teachers can now sign from anywhere.' });
+      toast({ title: t('geoDisabled'), description: t('geoDisabledDesc') });
     } catch (err) {
       toast({ variant: 'destructive', title: 'Failed to disable', description: err.message });
     } finally {
@@ -295,12 +296,12 @@ const AdminSchoolSettingsPage = () => {
   };
 
   /* ── cancel edit ────────────────────────────────────── */
-  const handleCancelEdit = () => {
+  const handleCancel{t('edit')} = () => {
     // Restore form to last saved DB values
     setLat(school?.latitude  != null ? String(school.latitude)           : '');
     setLng(school?.longitude != null ? String(school.longitude)          : '');
     setRadius(school?.geo_radius_meters != null ? String(school.geo_radius_meters) : '300');
-    setEditMode(false);
+    set{t('edit')}Mode(false);
   };
 
   /* ── render ─────────────────────────────────────────── */
@@ -312,7 +313,7 @@ const AdminSchoolSettingsPage = () => {
 
           <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
             <h1 className="text-3xl font-black tracking-tight">
-              {t('schoolSettings') || 'School Settings'}
+              t('schoolSettings')
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
               {t('schoolSettingsDesc') ||
@@ -337,7 +338,7 @@ const AdminSchoolSettingsPage = () => {
                   exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}>
                   <ConfiguredCard
                     school={school}
-                    onEdit={() => setEditMode(true)}
+                    on{t('edit')}={() => set{t('edit')}Mode(true)}
                     onClear={handleClear}
                     clearing={clearing}
                   />
@@ -356,9 +357,9 @@ const AdminSchoolSettingsPage = () => {
                     <div className="flex items-start gap-3 p-4 rounded-2xl border border-amber-500/25 bg-amber-500/6">
                       <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
                       <div>
-                        <p className="font-bold text-sm text-amber-400">Geolocation not configured</p>
+                        <p className="font-bold text-sm text-amber-400">{t('geoNotConfigured')}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          Teachers can currently sign logbooks from anywhere. Set coordinates below to restrict to campus.
+                          {t('geoNotConfiguredDesc')}
                         </p>
                       </div>
                     </div>
@@ -381,7 +382,7 @@ const AdminSchoolSettingsPage = () => {
                           <MapPin className="h-4 w-4 text-indigo-400" />
                         </div>
                         <h2 className="font-bold">
-                          {editMode && isConfigured ? 'Edit location' : 'Set school location'}
+                          {editMode && isConfigured ? '{t('edit')} location' : 'Set school location'}
                         </h2>
                       </div>
                       <button
@@ -390,8 +391,8 @@ const AdminSchoolSettingsPage = () => {
                         className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold border border-indigo-500/30 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/15 transition-all disabled:opacity-60"
                       >
                         {locating
-                          ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Locating…</>
-                          : <><Navigation className="h-3.5 w-3.5" /> Use my location</>}
+                          ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> {t('geoLocating')}</>
+                          : <><Navigation className="h-3.5 w-3.5" /> {t('useMyLocation')}</>}
                       </button>
                     </div>
 
@@ -412,12 +413,12 @@ const AdminSchoolSettingsPage = () => {
 
                     <div className="space-y-1.5">
                       <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                        Allowed radius (metres)
+                        {t('allowedRadius').replace(' (metres)', '')} (metres)
                       </Label>
                       <Input type="number" min="50" max="5000" step="50"
                         value={radius} onChange={e => setRadius(e.target.value)}
                         className="h-11 bg-white/5 border-white/10 rounded-xl focus:border-indigo-500/50" />
-                      <p className="text-[11px] text-muted-foreground">Recommended: 100 – 500 m. Minimum 50 m.</p>
+                      <p className="text-[11px] text-muted-foreground">{t('radiusHint')}</p>
                     </div>
 
                     <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-white/4 border border-white/8 text-xs text-muted-foreground">
@@ -435,17 +436,17 @@ const AdminSchoolSettingsPage = () => {
 
                     <div className={cn('grid gap-3', editMode && isConfigured ? 'grid-cols-2' : 'grid-cols-1')}>
                       {editMode && isConfigured && (
-                        <button onClick={handleCancelEdit}
+                        <button onClick={handleCancel{t('edit')}}
                           className="py-3.5 rounded-2xl font-bold text-sm border border-white/15 bg-white/5 hover:bg-white/10 transition-all flex items-center justify-center gap-2">
-                          <X className="h-4 w-4" /> Cancel
+                          <X className="h-4 w-4" /> {t('cancel')}
                         </button>
                       )}
                       <button onClick={handleSave} disabled={saving}
                         className="py-3.5 rounded-2xl font-bold text-sm text-white flex items-center justify-center gap-2 transition-all active:scale-[0.97] disabled:opacity-60"
                         style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', boxShadow: '0 6px 20px rgba(99,102,241,0.3)' }}>
                         {saving
-                          ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</>
-                          : <><Save className="h-4 w-4" /> Save settings</>}
+                          ? <><Loader2 className="h-4 w-4 animate-spin" /> {t('submitting')}</>
+                          : <><Save className="h-4 w-4" /> {t('saveSettings')}</>}
                       </button>
                     </div>
                   </div>

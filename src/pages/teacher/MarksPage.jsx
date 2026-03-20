@@ -169,8 +169,8 @@ const MarksPage = () => {
           return {
             sender_name:  teacherName,
             sender_role:  'teacher',
-            title:        `New mark: ${selectedSubject} — ${selectedSeq}`,
-            content:      `Your child received ${m.mark}/${m.total_marks} (${on20}/20) in ${selectedSubject} for ${selectedSeq}${className ? ` · ${className}` : ''}.`,
+            title:        `${t('markNotifTitle')}: ${selectedSubject} — ${selectedSeq}`,
+            content:      `${t('markNotifContent').replace('{mark}', m.mark).replace('{total}', m.total_marks).replace('{on20}', on20).replace('{subject}', selectedSubject).replace('{seq}', selectedSeq)}${className ? ` · ${className}` : ''}.`,
             target_type:  'parent',
             target_id:    m.student_matricule, // requires: ALTER TABLE notifications ALTER COLUMN target_id TYPE TEXT USING target_id::TEXT;
             school_id:    parseInt(schoolId),
@@ -181,7 +181,7 @@ const MarksPage = () => {
         if (notifErr) {
           // Most likely cause: target_id column is still INTEGER — run the SQL migration
           console.error('Mark notifications failed:', notifErr.message);
-          toast({ variant: 'destructive', title: 'Notifications not sent', description: `Run SQL migration: ALTER TABLE notifications ALTER COLUMN target_id TYPE TEXT USING target_id::TEXT; — ${notifErr.message}` });
+          toast({ variant: 'destructive', title: t('error'), description: `Run SQL migration: ALTER TABLE notifications ALTER COLUMN target_id TYPE TEXT USING target_id::TEXT; — ${notifErr.message}` });
         }
       } catch (notifErr) {
         console.error('Could not send mark notifications:', notifErr.message);

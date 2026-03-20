@@ -36,7 +36,7 @@ const AdminDashboard = () => {
     { icon: BookMarked,   label: t('adminSubjects'),   path: '/dashboard/administrator/subjects',     shortLabel: t('adminShortSubjects') },
     { icon: CalendarClock,label: t('timetables'),      path: '/dashboard/administrator/timetables',   shortLabel: t('adminShortTime') },
     { icon: MapPin,       label: t('schoolSettings') || 'School Settings', path: '/dashboard/administrator/school', shortLabel: 'Location' },
-    { icon: FileText,     label: 'Report Template',  path: '/dashboard/administrator/report-template', shortLabel: 'Template' },
+    { icon: FileText,     label: t('reportTemplateNav') || 'Report Template',  path: '/dashboard/administrator/report-template', shortLabel: t('reportTemplateNav') ? t('reportTemplateNav').slice(0,8) : 'Template' },
     { icon: MessageSquare,label: t('systemChat'),      path: '/dashboard/administrator/chat',         shortLabel: t('adminShortChat') },
   ];
   const handleSignOut = async () => { await signOut(); localStorage.clear(); navigate('/'); };
