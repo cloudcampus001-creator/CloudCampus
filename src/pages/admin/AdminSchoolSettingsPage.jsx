@@ -312,11 +312,10 @@ const AdminSchoolSettingsPage = () => {
 
           <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
             <h1 className="text-3xl font-black tracking-tight">
-              t('schoolSettings')
+              {t('schoolSettings')}
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              {t('schoolSettingsDesc') ||
-                "Set the school's GPS coordinates so teachers can only sign logbooks from campus."}
+              {t('schoolSettingsDesc')}
             </p>
           </motion.div>
 
