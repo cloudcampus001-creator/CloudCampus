@@ -111,7 +111,7 @@ const ConfiguredCard = ({ school, onEdit, onClear, clearing }) => (
       disabled={clearing}
       className="text-xs text-red-400/70 hover:text-red-400 transition-colors underline underline-offset-2 disabled:opacity-50"
     >
-      {clearing ? 'Disabling…' : '{t('disableGeo')}'}
+      {clearing ? 'Disabling…' : t('disableGeo')}
     </button>
   </motion.div>
 );
