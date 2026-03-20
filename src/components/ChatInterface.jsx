@@ -19,7 +19,7 @@ const ChatInterface = ({ currentUserRole, currentUserId, currentUserName, relate
   const { toast } = useToast();
   const { t } = useLanguage();
   
-  // -- VIEW STATE --
+  // -- VIEW STATE -- yeah
   const [activeConv, setActiveConv] = useState(null);
   const [showNewChat, setShowNewChat] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
