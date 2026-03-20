@@ -42,7 +42,7 @@ import { cn } from '@/lib/utils';
 const stagger = { hidden: {}, visible: { transition: { staggerChildren: 0.06 } } };
 const fadeUp  = { hidden: { opacity: 0, y: 12 }, visible: { opacity: 1, y: 0, transition: { duration: 0.3 } } };
 
-const BUCKET = 'library_books';
+const BUCKET = 'documents'; // reuses the existing teachers bucket
 
 const fmtSize = (bytes) => {
   if (!bytes) return null;
@@ -219,31 +219,19 @@ const AdminSubjectsLibraryPage = () => {
     setBooks(data || []); setBooksLoading(false);
   }, [sid]);
 
-  /* ── library: upload helper — tries library_books then library_documents ── */
+  /* ── upload using the existing 'documents' bucket (same one teachers use) ── */
   const uploadToBucket = async (file, folder) => {
     const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').substring(0, 60);
-    const path = `${folder}/${sid}_${Date.now()}_${safe}`;
+    const path = 'library/' + folder + '/' + sid + '_' + Date.now() + '_' + safe;
 
-    // Try primary bucket first, then fallback
-    const buckets = ['library_books', 'library_documents'];
-    let lastError = null;
+    const { error } = await supabase.storage
+      .from('documents')
+      .upload(path, file, { upsert: false, cacheControl: '3600' });
 
-    for (const bucket of buckets) {
-      const { error } = await supabase.storage
-        .from(bucket)
-        .upload(path, file, { upsert: true, contentType: file.type });
+    if (error) throw new Error('Upload failed: ' + error.message);
 
-      if (!error) {
-        const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path);
-        return { url: urlData.publicUrl, path, bucket };
-      }
-      lastError = error;
-    }
-
-    throw new Error(
-      `Upload failed on all buckets: ${lastError?.message}. ` +
-      `In Supabase Storage → library_books → Policies, add an INSERT policy for the anon role with definition: true`
-    );
+    const { data: urlData } = supabase.storage.from('documents').getPublicUrl(path);
+    return { url: urlData.publicUrl, path };
   };
 
   /* ── library: add book ── */
@@ -304,9 +292,12 @@ const AdminSubjectsLibraryPage = () => {
       const tryRemove = async (url) => {
         if (!url) return;
         try {
-          const marker = `/${BUCKET}/`;
+          const marker = '/documents/';
           const idx = url.indexOf(marker);
-          if (idx !== -1) await supabase.storage.from(BUCKET).remove([decodeURIComponent(url.slice(idx + marker.length))]);
+          if (idx !== -1) {
+            const sp = decodeURIComponent(url.slice(idx + marker.length));
+            await supabase.storage.from('documents').remove([sp]);
+          }
         } catch (_) {}
       };
       await tryRemove(book.file_url);
