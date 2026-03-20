@@ -117,6 +117,8 @@ const UploadBar = ({ progress }) => (
   </div>
 );
 
+const EMPTY_BOOK = { title: '', author: '', subject: '', description: '', file_url: '' };
+
 const AdminSubjectsLibraryPage = () => {
   const { toast } = useToast();
   const { t }     = useLanguage();
@@ -137,7 +139,6 @@ const AdminSubjectsLibraryPage = () => {
   const [savingCoef,    setSavingCoef]    = useState(false);
 
   // Library
-  const EMPTY_BOOK = { title: '', author: '', subject: '', description: '', file_url: '' };
   const [books,          setBooks]          = useState([]);
   const [booksLoading,   setBooksLoading]   = useState(true);
   const [showBookForm,   setShowBookForm]   = useState(false);
@@ -230,7 +231,7 @@ const AdminSubjectsLibraryPage = () => {
 
   /* ── library: add book ── */
   const handleAddBook = async (e) => {
-    e.preventDefault();
+    if (e?.preventDefault) e.preventDefault();
     if (!newBook.title.trim()) { toast({ variant: 'destructive', title: t('titleRequired') }); return; }
     if (!bookFile && !newBook.file_url.trim()) { toast({ variant: 'destructive', title: t('fileRequired'), description: t('fileRequiredDesc') }); return; }
 
@@ -422,7 +423,7 @@ const AdminSubjectsLibraryPage = () => {
                 initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.28 }}
                 className="overflow-hidden mb-6">
-                <form onSubmit={handleAddBook} className="p-5 rounded-2xl border border-emerald-500/25 bg-emerald-500/5 space-y-5">
+                <div className="p-5 rounded-2xl border border-emerald-500/25 bg-emerald-500/5 space-y-5">
                   <h3 className="font-black text-emerald-400 flex items-center gap-2">
                     <BookOpen className="h-4 w-4" /> {t('newTextbook')}
                   </h3>
@@ -503,14 +504,14 @@ const AdminSubjectsLibraryPage = () => {
 
                   {savingBook && uploadProgress > 0 && <UploadBar progress={uploadProgress} />}
 
-                  <button type="submit" disabled={savingBook}
+                  <button type="button" onClick={handleAddBook} disabled={savingBook}
                     className="w-full py-3.5 rounded-2xl font-bold text-sm text-white flex items-center justify-center gap-2 disabled:opacity-60 transition-all active:scale-[0.98]"
                     style={{ background: 'linear-gradient(135deg,#16a34a,#22c55e)', boxShadow: '0 6px 20px rgba(34,197,94,0.25)' }}>
                     {savingBook
                       ? <><Loader2 className="h-4 w-4 animate-spin" /> {t('uploading')}</>
                       : <><Upload className="h-4 w-4" /> {t('publishToLibrary')}</>}
                   </button>
-                </form>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
