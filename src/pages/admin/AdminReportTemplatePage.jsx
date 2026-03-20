@@ -25,7 +25,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useLanguage } from '@/contexts/LanguageContext';
 import PageTransition from '@/components/PageTransition';
 import { cn } from '@/lib/utils';
 
@@ -78,7 +77,6 @@ const HeaderPreview = ({ fields }) => {
 /* ════════════════════════════════════════════════════════ */
 const AdminReportTemplatePage = () => {
   const { toast } = useToast();
-  const { t }     = useLanguage();
   const { t }     = useLanguage();
 
   const schoolId = localStorage.getItem('schoolId');
