@@ -1,6 +1,6 @@
 export const translations = {
   en: {
-    // --- COMMON ACTIONS ---
+    // --- COMMON ACTIONS --- yeah
     loading: "Loading...",
     verifyingSession: "Verifying session...",
     error: "Error",
