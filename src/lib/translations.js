@@ -1,4 +1,3 @@
-export const translations = 
 export const translations = {
   en: {
     // --- COMMON ACTIONS ---
