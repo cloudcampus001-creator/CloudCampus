@@ -451,6 +451,7 @@ const VPMarksPage = ({ selectedClass }) => {
           target_id:    student.matricule,
           school_id:    parseInt(schoolId),
           created_at:   new Date().toISOString(),
+          // target_id must be TEXT — run: ALTER TABLE notifications ALTER COLUMN target_id TYPE TEXT USING target_id::TEXT;
         };
       });
 
@@ -470,7 +471,10 @@ const VPMarksPage = ({ selectedClass }) => {
         className: 'bg-green-500/10 border-green-500/50 text-green-400',
       });
     } catch (err) {
-      toast({ variant: 'destructive', title: 'Distribution failed', description: err.message });
+      const hint = err.message?.includes('integer')
+        ? 'Run this SQL in Supabase first: ALTER TABLE notifications ALTER COLUMN target_id TYPE TEXT USING target_id::TEXT;'
+        : err.message;
+      toast({ variant: 'destructive', title: 'Distribution failed', description: hint });
     } finally {
       setDistributing(false);
       setDistProgress({ done: 0, total: 0 });

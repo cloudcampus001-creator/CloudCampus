@@ -172,15 +172,19 @@ const MarksPage = () => {
             title:        `New mark: ${selectedSubject} — ${selectedSeq}`,
             content:      `Your child received ${m.mark}/${m.total_marks} (${on20}/20) in ${selectedSubject} for ${selectedSeq}${className ? ` · ${className}` : ''}.`,
             target_type:  'parent',
-            target_id:    m.student_matricule,
+            target_id:    m.student_matricule, // requires: ALTER TABLE notifications ALTER COLUMN target_id TYPE TEXT USING target_id::TEXT;
             school_id:    parseInt(schoolId),
             created_at:   new Date().toISOString(),
           };
         });
-        await supabase.from('notifications').insert(notifications);
+        const { error: notifErr } = await supabase.from('notifications').insert(notifications);
+        if (notifErr) {
+          // Most likely cause: target_id column is still INTEGER — run the SQL migration
+          console.error('Mark notifications failed:', notifErr.message);
+          toast({ variant: 'destructive', title: 'Notifications not sent', description: `Run SQL migration: ALTER TABLE notifications ALTER COLUMN target_id TYPE TEXT USING target_id::TEXT; — ${notifErr.message}` });
+        }
       } catch (notifErr) {
-        // Notification failure must not block the marks save toast
-        console.warn('Could not send mark notifications:', notifErr.message);
+        console.error('Could not send mark notifications:', notifErr.message);
       }
 
       toast({ title: `✓ ${t('success')}`, description: t('marksSaved') });
