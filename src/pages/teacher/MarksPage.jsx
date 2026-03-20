@@ -166,13 +166,30 @@ const MarksPage = () => {
       try {
         const notifications = marksData.map(m => {
           const on20 = ((m.mark / m.total_marks) * 20).toFixed(2);
+          const pct  = ((m.mark / m.total_marks) * 100).toFixed(0);
+          const appreciation =
+            on20 >= 16 ? 'Excellent / Excellent' :
+            on20 >= 14 ? 'Very Good / Très Bien' :
+            on20 >= 12 ? 'Good / Bien' :
+            on20 >= 10 ? 'Average / Assez Bien' :
+            'Below Average / Insuffisant';
+          // Bilingual content — EN first, FR second
+          const title = `📝 New mark · Nouvelle note — ${selectedSubject}`;
+          const body = [
+            `🇬🇧 Your child scored ${m.mark}/${m.total_marks} (${on20}/20) in ${selectedSubject} · ${selectedSeq}${className ? ` · ${className}` : ''}.`,
+            `Appreciation: ${appreciation}`,
+            ``,
+            `🇫🇷 Votre enfant a obtenu ${m.mark}/${m.total_marks} (${on20}/20) en ${selectedSubject} · ${selectedSeq}${className ? ` · ${className}` : ''}.`,
+            `Appréciation : ${appreciation}`,
+          ].join('
+');
           return {
             sender_name:  teacherName,
             sender_role:  'teacher',
-            title:        `${t('markNotifTitle')}: ${selectedSubject} — ${selectedSeq}`,
-            content:      `${t('markNotifContent').replace('{mark}', m.mark).replace('{total}', m.total_marks).replace('{on20}', on20).replace('{subject}', selectedSubject).replace('{seq}', selectedSeq)}${className ? ` · ${className}` : ''}.`,
+            title,
+            content:      body,
             target_type:  'parent',
-            target_id:    m.student_matricule, // requires: ALTER TABLE notifications ALTER COLUMN target_id TYPE TEXT USING target_id::TEXT;
+            target_id:    m.student_matricule,
             school_id:    parseInt(schoolId),
             created_at:   new Date().toISOString(),
           };

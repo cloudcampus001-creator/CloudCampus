@@ -423,64 +423,178 @@ const VPMarksPage = ({ selectedClass }) => {
     } finally { setGenerating(false); }
   };
 
-  /* ── distribute: send each student's report card to their parent ── */
+  /* ── helper: build single-student HTML card ── */
+  const buildStudentCardHtml = (student, allSubjects, className, selectedSeqs, template, totalCards) => {
+    const period  = selectedSeqs.join(' + ');
+    const accent  = template?.accent_color || '#7c3aed';
+    const rows = allSubjects.map(sub => {
+      const r = student.subjectRows.find(x => x.subject === sub);
+      if (!r || !r.offered) return '';
+      const mark     = r.markOn20 !== null ? r.markOn20.toFixed(2) : '—';
+      const weighted = r.weighted  !== null ? r.weighted.toFixed(2) : '—';
+      const color    = r.markOn20 === null ? '#6b7280' : r.markOn20 >= 10 ? '#15803d' : '#dc2626';
+      return `<tr><td>${sub}</td><td class="c">${r.coef}</td><td class="c" style="color:${color};font-weight:700">${mark}</td><td class="c">${weighted}</td></tr>`;
+    }).join('');
+    const avgColor = student.average == null ? '#6b7280' : student.average >= 10 ? '#15803d' : '#dc2626';
+    const decisionEn = student.average == null ? '—' : student.average >= 10 ? 'PROMOTED ✓' : 'NOT PROMOTED ✗';
+    const decisionFr = student.average == null ? '—' : student.average >= 10 ? 'PROMU(E) ✓' : 'NON PROMU(E) ✗';
+    const decColor   = student.average == null ? '#6b7280' : student.average >= 10 ? '#15803d' : '#dc2626';
+    const sumW = student.subjectRows.filter(r => r.offered && r.weighted !== null).reduce((s, r) => s + r.weighted, 0).toFixed(2);
+    const rankStr = student.rank ? `${ordinal(student.rank)} / ${totalCards}` : '—';
+
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>Report Card — ${student.name}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Arial,sans-serif;font-size:12px;color:#1f2937;background:#fff;padding:28px;max-width:700px;margin:0 auto}
+.hdr{text-align:center;border-bottom:3px solid ${accent};padding-bottom:14px;margin-bottom:16px}
+.logo{max-height:60px;object-fit:contain;display:block;margin:0 auto 6px}
+.school{font-size:17px;font-weight:800;color:${accent};letter-spacing:1px;text-transform:uppercase}
+.motto{font-size:11px;font-style:italic;color:#6b7280;margin-top:3px}
+.addr{font-size:10px;color:#9ca3af;margin-top:4px}
+.sub{font-size:11px;font-weight:700;color:#374151;margin-top:6px;letter-spacing:3px;text-transform:uppercase}
+.meta{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px;margin-top:10px;font-size:11px}
+table{width:100%;border-collapse:collapse;font-size:12px;margin-top:12px}
+th,td{border:1px solid #d1d5db;padding:6px 9px}
+thead tr{background:${accent};color:#fff}
+tbody tr:nth-child(even){background:#f8fafc}
+tfoot .tot{background:#faf5ff;font-weight:600}
+.c{text-align:center}
+.sigs{display:flex;justify-content:space-between;margin-top:22px;font-size:10px;color:#6b7280;flex-wrap:wrap;gap:8px}
+.bilingual{margin-top:16px;padding:10px;background:#f9fafb;border-radius:6px;font-size:11px;color:#374151;border:1px solid #e5e7eb}
+</style></head><body>
+<div class="hdr">
+  ${template?.logo_url ? `<img class="logo" src="${template.logo_url}" alt="logo" onerror="this.style.display='none'">` : ''}
+  <div class="school">${template?.school_name || schoolName || 'CloudCampus School'}</div>
+  ${template?.motto  ? `<div class="motto">«${template.motto}»</div>` : ''}
+  ${template?.address ? `<div class="addr">${template.address}</div>` : ''}
+  <div class="sub">ACADEMIC REPORT CARD / BULLETIN DE NOTES</div>
+  <div class="meta">
+    <span><b>Student / Élève:</b> ${student.name}</span>
+    <span><b>Class / Classe:</b> ${className}</span>
+    <span><b>Period / Période:</b> ${period}</span>
+    <span><b>Date:</b> ${new Date().toLocaleDateString()}</span>
+  </div>
+</div>
+<table>
+  <thead><tr><th>Subject / Matière</th><th>Coef</th><th>Mark / Note /20</th><th>Weighted / Pondéré</th></tr></thead>
+  <tbody>${rows}</tbody>
+  <tfoot>
+    <tr class="tot"><td colspan="2"><b>General Average / Moyenne Générale</b></td>
+      <td class="c" style="color:${avgColor};font-size:1.15em;font-weight:800">${student.average !== null ? student.average.toFixed(2) + '/20' : '—'}</td>
+      <td class="c">${sumW}</td></tr>
+    <tr class="tot"><td colspan="2"><b>Class Rank / Rang</b></td>
+      <td colspan="2" class="c">${rankStr}</td></tr>
+    <tr class="tot"><td colspan="2"><b>Decision / Décision</b></td>
+      <td colspan="2" class="c" style="color:${decColor};font-weight:700">${decisionEn} · ${decisionFr}</td></tr>
+  </tfoot>
+</table>
+<div class="sigs">
+  <span>Class Teacher / Prof Principal: ____________________</span>
+  ${template?.principal ? `<span>Principal: ${template.principal}</span>` : '<span>Vice Principal / Censeur: ____________________</span>'}
+  <span>Parent: ____________________</span>
+</div>
+</body></html>`;
+  };
+
+  /* ── distribute: generate individual HTML card per student, upload, notify ── */
   const handleDistribute = async () => {
     if (!reportCards.length) return;
-    const vpName  = localStorage.getItem('userName') || 'Vice Principal';
-    const period  = selectedSeqs.join(' + ');
-    const total   = reportCards.length;
+    const vpName = localStorage.getItem('userName') || 'Vice Principal';
+    const period = selectedSeqs.join(' + ');
+    const total  = reportCards.length;
     setDistributing(true);
     setDistProgress({ done: 0, total });
     let sent = 0;
 
     try {
-      // Build notifications in batch — one per student
-      const notifications = reportCards.map(student => {
+      const notifications = [];
+
+      for (const student of reportCards) {
+        // 1. Generate the individual HTML report card
+        const html = buildStudentCardHtml(student, allSubjects, className, selectedSeqs, template, total);
+        const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+        const fileName = `report_${schoolId}_${period.replace(/[\s+]+/g, '_')}_${student.matricule}.html`;
+        const storagePath = `report_cards/${schoolId}/${fileName}`;
+
+        // 2. Upload to Supabase storage (library_documents bucket — UNRESTRICTED)
+        let fileUrl = null;
+        try {
+          const { error: upErr } = await supabase.storage
+            .from('library_documents')
+            .upload(storagePath, blob, { upsert: true, contentType: 'text/html' });
+          if (!upErr) {
+            const { data: urlData } = supabase.storage
+              .from('library_documents')
+              .getPublicUrl(storagePath);
+            fileUrl = urlData?.publicUrl || null;
+          } else {
+            console.warn('Upload error for', student.name, upErr.message);
+          }
+        } catch (upEx) {
+          console.warn('Upload exception for', student.name, upEx.message);
+        }
+
+        // 3. Build bilingual notification content
+        const avg      = student.average !== null ? student.average.toFixed(2) : '—';
+        const rankStr  = student.rank ? `${student.rank}${student.rank===1?'st':student.rank===2?'nd':student.rank===3?'rd':'th'} / ${total}` : '—';
+        const decEn    = student.average !== null ? (student.average >= 10 ? 'PROMOTED ✓' : 'NOT PROMOTED ✗') : '—';
+        const decFr    = student.average !== null ? (student.average >= 10 ? 'PROMU(E) ✓' : 'NON PROMU(E) ✗') : '—';
         const graded   = student.subjectRows.filter(r => r.offered && r.markOn20 !== null);
         const lines    = graded.map(r => `• ${r.subject}: ${r.markOn20.toFixed(2)}/20 (coef ${r.coef})`).join('\n');
-        const avg      = student.average !== null ? student.average.toFixed(2) : '—';
-        const rank     = student.rank ? `${student.rank}${student.rank===1?'st':student.rank===2?'nd':student.rank===3?'rd':'th'} / ${total}` : '—';
-        const decision = student.average !== null ? (student.average >= 10 ? `${t('reportCardPromoted')} ✓` : `${t('reportCardNotPromoted')} ✗`) : '—';
 
-        return {
+        const body = [
+          `🇬🇧 ${period} results for your child:`,
+          lines,
+          `📊 Average: ${avg}/20  |  🏅 Rank: ${rankStr}  |  📋 ${decEn}`,
+          ``,
+          `🇫🇷 Résultats de ${period} pour votre enfant :`,
+          lines,
+          `📊 Moyenne : ${avg}/20  |  🏅 Rang : ${rankStr}  |  📋 ${decFr}`,
+          fileUrl ? `\n📄 Ouvrez la pièce jointe pour voir le bulletin complet.` : '',
+        ].join('\n');
+
+        notifications.push({
           sender_name:  vpName,
           sender_role:  'vice_principal',
-          title:        `${t('reportCardNotifTitle')} — ${period} · ${className}`,
-          content:      `${t('reportCardNotifTitle')} — ${period}:\n\n${lines}\n\n📊 ${t('reportCardNotifAvg')}: ${avg}/20\n🏅 ${t('reportCardNotifRank')}: ${rank}\n📋 ${t('reportCardNotifDecision')}: ${decision}`,
+          title:        `📊 Report Card / Bulletin — ${period} · ${className}`,
+          content:      body,
           target_type:  'parent',
           target_id:    student.matricule,
           school_id:    parseInt(schoolId),
+          file_url:     fileUrl,
           created_at:   new Date().toISOString(),
-          // target_id must be TEXT — run: ALTER TABLE notifications ALTER COLUMN target_id TYPE TEXT USING target_id::TEXT;
-        };
-      });
+        });
 
-      // Insert in chunks of 20 to stay within Supabase request limits
-      const CHUNK = 20;
-      for (let i = 0; i < notifications.length; i += CHUNK) {
-        const chunk = notifications.slice(i, i + CHUNK);
-        const { error } = await supabase.from('notifications').insert(chunk);
-        if (error) throw error;
-        sent += chunk.length;
+        sent++;
         setDistProgress({ done: sent, total });
       }
 
+      // 4. Insert all notifications in chunks of 20
+      const CHUNK = 20;
+      for (let i = 0; i < notifications.length; i += CHUNK) {
+        const { error } = await supabase.from('notifications').insert(notifications.slice(i, i + CHUNK));
+        if (error) throw error;
+      }
+
       toast({
-        title: `✓ ${t('distributeBtn')} (${sent})`,
-        description: t('distributeSuccessDesc'),
+        title: `✓ Distributed to ${sent} parents`,
+        description: `Each parent received their child's report card${notifications[0]?.file_url ? ' with a PDF link' : ''}.`,
         className: 'bg-green-500/10 border-green-500/50 text-green-400',
       });
     } catch (err) {
       const hint = err.message?.includes('integer')
-        ? 'Run this SQL in Supabase first: ALTER TABLE notifications ALTER COLUMN target_id TYPE TEXT USING target_id::TEXT;'
+        ? 'Run SQL: ALTER TABLE notifications ALTER COLUMN target_id TYPE TEXT USING target_id::TEXT;'
         : err.message;
-      toast({ variant: 'destructive', title: t('distributeFailed'), description: hint });
+      toast({ variant: 'destructive', title: 'Distribution failed', description: hint });
     } finally {
       setDistributing(false);
       setDistProgress({ done: 0, total: 0 });
     }
   };
 
+  /* Empty state */
+  if (!selectedClass) {
   /* Empty state */
   if (!selectedClass) {
     return (

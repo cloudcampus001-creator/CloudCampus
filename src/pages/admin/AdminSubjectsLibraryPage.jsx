@@ -171,9 +171,9 @@ const AdminSubjectsLibraryPage = () => {
   const uploadFile = async (file, folder) => {
     const ext   = file.name.split('.').pop();
     const path  = `${folder}/${schoolId}_${Date.now()}.${ext}`;
-    const { data, error } = await supabase.storage.from('library-books').upload(path, file, { upsert: true });
+    const { data, error } = await supabase.storage.from('library_books').upload(path, file, { upsert: true });
     if (error) throw error;
-    const { data: urlData } = supabase.storage.from('library-books').getPublicUrl(path);
+    const { data: urlData } = supabase.storage.from('library_books').getPublicUrl(path);
     return urlData.publicUrl;
   };
 
