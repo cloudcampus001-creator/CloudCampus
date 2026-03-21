@@ -17,6 +17,45 @@ const LandingPage = () => {
 
   const goToSchool = () => navigate('/select-school');
 
+  // ── Contact form state ───────────────────────────────────────
+  const [contactForm,    setContactForm]    = React.useState({ name: '', email: '', message: '' });
+  const [contactSending, setContactSending] = React.useState(false);
+  const [contactSent,    setContactSent]    = React.useState(false);
+  const [contactError,   setContactError]   = React.useState('');
+
+  const handleContactSubmit = async (e) => {
+    e.preventDefault();
+    setContactSending(true);
+    setContactError('');
+    try {
+      // Web3Forms — free email relay. Key is designed to be public.
+      // Get yours at https://web3forms.com/ using cloudcampus001@gmail.com
+      const res = await fetch('https://api.web3forms.com/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          access_key: 'd3194771-5f79-40bd-8b4d-cb6d3e8e44b9',
+          name:       contactForm.name,
+          email:      contactForm.email,
+          message:    contactForm.message,
+          subject:    `CloudCampus contact: ${contactForm.name}`,
+          from_name:  'CloudCampus Website',
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setContactSent(true);
+        setContactForm({ name: '', email: '', message: '' });
+      } else {
+        setContactError(data.message || 'Failed to send. Please try again.');
+      }
+    } catch (err) {
+      setContactError('Network error. Please try again.');
+    } finally {
+      setContactSending(false);
+    }
+  };
+
   // ── Navbar scroll state ──────────────────────────────────────
   useEffect(() => {
     const onScroll = () => {
@@ -149,7 +188,7 @@ const LandingPage = () => {
 
               {/* Desktop nav */}
               <nav className="hidden md:flex items-center gap-8">
-                {[['features','Features'],['roles','Who It\'s For'],['how','How It Works'],['testimonials','Testimonials']].map(([id, label]) => (
+                {[['features','Features'],['roles','Who It\'s For'],['how','How It Works'],['testimonials','Testimonials'],['contact','Contact']].map(([id, label]) => (
                   <a key={id} href={`#${id}`} onClick={e=>{e.preventDefault();scrollTo(id);}} className="cc-navlink text-sm font-medium text-gray-500 hover:text-blue-600 transition-colors">{label}</a>
                 ))}
               </nav>
@@ -626,6 +665,120 @@ const LandingPage = () => {
         </section>
 
 
+
+        {/* ══════════════ CONTACT ══════════════ */}
+        <section id="contact" className="py-24 bg-white">
+          <div className="max-w-5xl mx-auto px-5 md:px-8">
+            <div className="grid lg:grid-cols-2 gap-16 items-start">
+
+              {/* Left — info */}
+              <div className="cc-reveal">
+                <span className="inline-block bg-blue-50 text-blue-600 font-semibold text-xs tracking-widest uppercase px-4 py-1.5 rounded-full mb-5">Get in touch</span>
+                <h2 className="text-3xl md:text-4xl font-extrabold text-blue-900 mb-5 leading-tight">
+                  We'd love to<br/>hear from you
+                </h2>
+                <p className="text-gray-500 text-lg leading-relaxed mb-8">
+                  Whether you're a school director, parent, or teacher — reach out and we'll get back to you within 24 hours.
+                </p>
+                <div className="space-y-4">
+                  {[
+                    { icon: '✉️', label: 'Email', value: 'cloudcampus001@gmail.com' },
+                    { icon: '📍', label: 'Location', value: 'Yaoundé, Cameroon 🇨🇲' },
+                    { icon: '🕐', label: 'Response time', value: 'Within 24 hours' },
+                  ].map(item => (
+                    <div key={item.label} className="flex items-center gap-4 p-4 rounded-xl bg-blue-50 border border-blue-100">
+                      <span className="text-2xl">{item.icon}</span>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-blue-400">{item.label}</p>
+                        <p className="text-sm font-semibold text-blue-900">{item.value}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Right — form */}
+              <div className="cc-reveal cc-d1">
+                <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm" style={{boxShadow:'0 4px 24px rgba(59,130,246,0.08)'}}>
+                  {contactSent ? (
+                    <div className="text-center py-10">
+                      <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4 text-3xl">✅</div>
+                      <h3 className="text-xl font-bold text-gray-800 mb-2">Message sent!</h3>
+                      <p className="text-gray-500 text-sm">We'll reply to your email within 24 hours.</p>
+                      <button
+                        onClick={() => setContactSent(false)}
+                        className="mt-6 text-blue-600 text-sm font-semibold hover:underline"
+                      >Send another message</button>
+                    </div>
+                  ) : (
+                    <div className="space-y-5">
+                      <h3 className="text-lg font-bold text-gray-800">Send us a message</h3>
+
+                      <div>
+                        <label className="block text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Your name</label>
+                        <input
+                          type="text" required
+                          value={contactForm.name}
+                          onChange={e => setContactForm(p => ({...p, name: e.target.value}))}
+                          placeholder="e.g. Jean Nkamla"
+                          className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 transition-all"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Email address</label>
+                        <input
+                          type="email" required
+                          value={contactForm.email}
+                          onChange={e => setContactForm(p => ({...p, email: e.target.value}))}
+                          placeholder="you@school.cm"
+                          className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 transition-all"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Message</label>
+                        <textarea
+                          required rows={5}
+                          value={contactForm.message}
+                          onChange={e => setContactForm(p => ({...p, message: e.target.value}))}
+                          placeholder="How can we help your school?"
+                          className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 transition-all resize-none"
+                        />
+                      </div>
+
+                      {contactError && (
+                        <p className="text-red-500 text-sm bg-red-50 border border-red-100 rounded-xl px-4 py-2">{contactError}</p>
+                      )}
+
+                      <button
+                        onClick={handleContactSubmit}
+                        disabled={contactSending || !contactForm.name || !contactForm.email || !contactForm.message}
+                        className="w-full text-white font-bold py-3.5 rounded-xl transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed disabled:translate-y-0 flex items-center justify-center gap-2"
+                        style={{background:'linear-gradient(135deg,#3b82f6,#60a5fa)'}}
+                      >
+                        {contactSending ? (
+                          <>
+                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                            </svg>
+                            Sending…
+                          </>
+                        ) : 'Send Message →'}
+                      </button>
+
+                      <p className="text-center text-xs text-gray-400">We'll reply within 24 hours to {contactForm.email || 'your email'}.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </section>
+
+
         {/* ══════════════ FOOTER ══════════════ */}
         <footer className="text-white" style={{background:'#1e3a8a'}}>
           <div className="max-w-7xl mx-auto px-5 md:px-8 pt-16 pb-8">
@@ -659,8 +812,8 @@ const LandingPage = () => {
             <div className="border-t pt-8 flex flex-col sm:flex-row items-center justify-between gap-4" style={{borderColor:'rgba(255,255,255,0.1)'}}>
               <p className="text-sm" style={{color:'rgba(255,255,255,0.4)'}}>© 2025 CloudCampus. All rights reserved.</p>
               <div className="flex gap-6 text-sm">
-                {['Privacy','Terms','Contact'].map(l => (
-                  <a key={l} href="#" className="transition-colors" style={{color:'rgba(255,255,255,0.4)'}}>{l}</a>
+                {[['Privacy','#'],['Terms','#'],['Contact','#contact']].map(([l,href]) => (
+                  <a key={l} href={href} onClick={e=>{e.preventDefault();href!=='#'&&scrollTo(href.slice(1));}} className="transition-colors" style={{color:'rgba(255,255,255,0.4)'}}>{l}</a>
                 ))}
               </div>
             </div>

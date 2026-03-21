@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { FileText, BookOpen, Download, Search, Eye, Calendar, User, X } from 'lucide-react';
+import { FileText, BookOpen, Search, Eye, Calendar, User, X } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { Input } from '@/components/ui/input';
 import { Helmet } from 'react-helmet';
@@ -160,10 +160,6 @@ const DocsPage = () => {
                       <button onClick={e => { e.stopPropagation(); setSelectedDoc(doc); }}
                         className="p-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 transition-colors" title={t('previewDoc')}>
                         <Eye className="h-3.5 w-3.5" />
-                      </button>
-                      <button onClick={e => { e.stopPropagation(); window.open(doc.file_url, '_blank'); }}
-                        className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors" title={t('download')}>
-                        <Download className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   </div>

@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { X, Download, Loader2, AlertCircle, FileText } from "lucide-react";
+import { X, Loader2, AlertCircle, FileText } from "lucide-react";
 import { motion, AnimatePresence } from 'framer-motion';
 
 export function DocumentViewerModal({ isOpen, onClose, doc }) {
@@ -69,20 +68,6 @@ export function DocumentViewerModal({ isOpen, onClose, doc }) {
            </div>
            
            <div className="flex items-center gap-2 flex-shrink-0">
-             {/* Download button still allows getting the file, but user explicitly asks for it */}
-             <Button 
-                variant="ghost" 
-                size="sm" 
-                className="text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-                onClick={() => window.open(doc.file_url, '_blank')}
-                title="Download Original File"
-             >
-                <Download className="h-4 w-4 sm:mr-2" />
-                <span className="hidden sm:inline">Download</span>
-             </Button>
-             
-             <div className="w-px h-6 bg-slate-800 mx-1 hidden sm:block"></div>
-
              <Button 
                 variant="ghost" 
                 size="icon" 
@@ -124,9 +109,7 @@ export function DocumentViewerModal({ isOpen, onClose, doc }) {
                    <p className="text-slate-400 mb-6 text-sm">
                      We couldn't load the secure preview for this document. It might be restricted or an unsupported format.
                    </p>
-                   <Button onClick={() => window.open(doc.file_url, '_blank')} variant="outline" className="border-slate-700 hover:bg-slate-800 text-slate-300">
-                     Try Opening Externally
-                   </Button>
+                   <p className="text-slate-500 text-xs mt-2">Please ask your teacher to re-upload this document.</p>
                 </motion.div>
              ) : (
                 <motion.div 
@@ -156,10 +139,7 @@ export function DocumentViewerModal({ isOpen, onClose, doc }) {
                           <p className="text-slate-400 mb-6 max-w-xs mx-auto text-sm">
                              This file type ({doc.file_name.split('.').pop()}) doesn't support secure in-app previewing.
                           </p>
-                          <Button onClick={() => window.open(doc.file_url, '_blank')} className="bg-blue-600 hover:bg-blue-700 text-white">
-                             <Download className="w-4 h-4 mr-2" />
-                             Download File
-                          </Button>
+                          <p className="text-slate-500 text-sm">Contact your teacher for this file.</p>
                        </div>
                     )}
                 </motion.div>
