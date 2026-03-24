@@ -1,193 +1,101 @@
 /**
  * sessionPersistence.js
  * ---------------------
- * CloudCampus — Persistent Session Manager
+ * CloudCampus — UI Session Mirror
  *
- * Keeps users logged in for up to 5 days of INACTIVITY.
- * The timer resets every time the user does anything in the app.
- * If they haven't opened the app for 5 full days, they are
- * automatically signed out next time the app loads.
+ * SECURITY NOTE (updated):
+ * The source of truth for authentication is now the Supabase JWT,
+ * set via supabase.auth.setSession() in each login page.
+ * ProtectedRoute validates the JWT — NOT localStorage.
  *
- * Works perfectly in APK/WebView environments (median.co) because
- * it uses localStorage which WebViews persist between app launches.
+ * This file's only remaining job is to mirror session data
+ * (role, schoolId, userName etc.) into the individual localStorage
+ * keys that existing dashboard pages read with getItem().
+ * It is no longer used for access control decisions.
+ *
+ * The 5-day inactivity feature has been removed — Supabase manages
+ * token expiry with automatic refresh tokens.
  */
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const SESSION_KEY        = 'cc_session';       // main session blob
-const ACTIVITY_KEY       = 'cc_last_activity'; // last-activity timestamp (ms)
-const INACTIVITY_LIMIT   = 5 * 24 * 60 * 60 * 1000; // 5 days in milliseconds
-
-// ─── Types (JSDoc) ────────────────────────────────────────────────────────────
-/**
- * @typedef {Object} CCSession
- * @property {string} userRole       - 'parent' | 'teacher' | 'discipline' | 'vice-principal' | 'administrator'
- * @property {string|number} userId  - DB row id
- * @property {string} userName       - Display name
- * @property {string|number} schoolId
- * @property {string|number} [classId]
- * @property {string} [studentName]  - For parent sessions
- * @property {number} loginTime      - Unix ms when the session was created
- * @property {number} lastActivity   - Unix ms of the most recent activity
- */
+const SESSION_KEY  = 'cc_session';
 
 // ─── Core API ─────────────────────────────────────────────────────────────────
 
 /**
- * Save a new session after a successful login.
- * Call this instead of individual localStorage.setItem() calls.
+ * Mirror session data to localStorage after a successful login.
+ * Called alongside supabase.auth.setSession() — never instead of it.
  *
- * @param {Omit<CCSession, 'loginTime' | 'lastActivity'>} data
+ * @param {{ userRole, userId, userName, schoolId, classId?, studentName?, studentMatricule? }} data
  */
 export function saveSession(data) {
-  const now = Date.now();
-
-  /** @type {CCSession} */
   const session = {
-    userRole:    data.userRole    || '',
-    userId:      data.userId      ?? '',
-    userName:    data.userName    || '',
-    schoolId:    data.schoolId    ?? '',
-    classId:     data.classId     ?? '',
-    studentName: data.studentName || '',
-    loginTime:   now,
-    lastActivity: now,
+    userRole:         data.userRole         || '',
+    userId:           data.userId           ?? '',
+    userName:         data.userName         || '',
+    schoolId:         data.schoolId         ?? '',
+    classId:          data.classId          ?? '',
+    studentName:      data.studentName      || '',
+    studentMatricule: data.studentMatricule || '',
+    savedAt:          Date.now(),
   };
 
-  // Write the structured session blob
   localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-
-  // Mirror individual keys that the rest of the app reads directly
-  // This keeps every existing page working without changes
   _mirrorToLegacyKeys(session);
 }
 
 /**
- * Read and validate the current session.
- * Returns null if there is no session OR the inactivity limit has been exceeded.
- *
- * @returns {CCSession|null}
+ * Read the mirrored session (for UI use only — not for auth decisions).
+ * @returns {object|null}
  */
 export function getSession() {
   try {
     const raw = localStorage.getItem(SESSION_KEY);
     if (!raw) return null;
-
-    /** @type {CCSession} */
-    const session = JSON.parse(raw);
-
-    // ── Inactivity check ──────────────────────────────────────────────────────
-    const lastActivity = session.lastActivity || session.loginTime || 0;
-    const elapsed      = Date.now() - lastActivity;
-
-    if (elapsed > INACTIVITY_LIMIT) {
-      // Session has expired due to inactivity — clear everything
-      clearSession('inactivity');
-      return null;
-    }
-
-    return session;
+    return JSON.parse(raw);
   } catch {
-    clearSession('parse_error');
     return null;
   }
 }
 
 /**
- * Record activity right now.
- * Call this on any significant user interaction (click, keydown, etc.).
- * Debounced internally so it only writes to storage at most once per minute.
- */
-let _lastWrite = 0;
-export function touchActivity() {
-  const now = Date.now();
-
-  // Throttle: only write to localStorage once per 60 seconds
-  if (now - _lastWrite < 60_000) return;
-  _lastWrite = now;
-
-  try {
-    const raw = localStorage.getItem(SESSION_KEY);
-    if (!raw) return;
-
-    const session = JSON.parse(raw);
-    session.lastActivity = now;
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  } catch {
-    // Silently ignore — non-critical
-  }
-}
-
-/**
- * Destroy the session (logout or expiry).
- * @param {'logout'|'inactivity'|'parse_error'} [reason]
+ * Destroy all session data.
+ * Always call alongside supabase.auth.signOut().
  */
 export function clearSession(reason = 'logout') {
-  if (process.env.NODE_ENV !== 'production') {
+  if (import.meta.env.DEV) {
     console.log(`[CloudCampus] Session cleared — reason: ${reason}`);
   }
 
   localStorage.removeItem(SESSION_KEY);
-  localStorage.removeItem(ACTIVITY_KEY);
 
-  // Clear all legacy keys so old code doesn't see stale data
   const legacyKeys = [
     'userRole', 'userId', 'userName', 'schoolId',
-    'classId', 'studentName',
+    'classId', 'studentName', 'studentMatricule',
+    // Legacy activity key from old sessionPersistence
+    'cc_last_activity',
   ];
-  legacyKeys.forEach(k => localStorage.removeItem(k));
+  legacyKeys.forEach((k) => localStorage.removeItem(k));
 }
 
 /**
- * Returns true if a valid (non-expired) session exists.
+ * Returns true if there is any session data in localStorage.
+ * NOTE: This is NOT an auth check — use supabase.auth.getSession() for that.
  */
 export function isSessionAlive() {
   return getSession() !== null;
 }
 
-/**
- * How many milliseconds remain before the session expires due to inactivity.
- * Returns 0 if there is no active session.
- */
-export function sessionTimeRemaining() {
-  const session = getSession();
-  if (!session) return 0;
-  const elapsed = Date.now() - session.lastActivity;
-  return Math.max(0, INACTIVITY_LIMIT - elapsed);
-}
-
-/**
- * Human-readable time remaining (e.g. "4d 12h").
- */
-export function sessionTimeRemainingHuman() {
-  const ms = sessionTimeRemaining();
-  if (!ms) return 'Expired';
-
-  const days    = Math.floor(ms / 86_400_000);
-  const hours   = Math.floor((ms % 86_400_000) / 3_600_000);
-  const minutes = Math.floor((ms % 3_600_000) / 60_000);
-
-  if (days > 0)   return `${days}d ${hours}h`;
-  if (hours > 0)  return `${hours}h ${minutes}m`;
-  return `${minutes}m`;
-}
-
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
-/**
- * Mirror session fields into the individual localStorage keys that
- * existing pages read directly (e.g. localStorage.getItem('userRole')).
- * This ensures 100% backward compatibility.
- * @param {CCSession} session
- */
 function _mirrorToLegacyKeys(session) {
   const map = {
-    userRole:    session.userRole,
-    userId:      session.userId,
-    userName:    session.userName,
-    schoolId:    session.schoolId,
-    classId:     session.classId,
-    studentName: session.studentName,
+    userRole:         session.userRole,
+    userId:           session.userId,
+    userName:         session.userName,
+    schoolId:         session.schoolId,
+    classId:          session.classId,
+    studentName:      session.studentName,
+    studentMatricule: session.studentMatricule,
   };
 
   Object.entries(map).forEach(([key, value]) => {
@@ -195,4 +103,14 @@ function _mirrorToLegacyKeys(session) {
       localStorage.setItem(key, String(value));
     }
   });
+}
+
+
+/**
+ * touchActivity — kept for App.jsx compatibility.
+ * No longer writes to localStorage (Supabase handles token refresh).
+ */
+export function touchActivity() {
+  // No-op: session expiry is now managed by Supabase JWT refresh tokens.
+  // This export is kept so App.jsx doesn't need to change.
 }

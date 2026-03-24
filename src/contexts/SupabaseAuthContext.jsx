@@ -2,56 +2,40 @@
  * SupabaseAuthContext.jsx
  * -----------------------
  * Provides Supabase auth state to the app.
- * Integrates with sessionPersistence so the 5-day inactivity rule
- * is enforced even when Supabase's own token is still technically valid.
+ *
+ * CHANGES FROM ORIGINAL:
+ * - isSessionValid() now trusts the Supabase JWT directly.
+ *   The JWT is cryptographically signed — no need to also check localStorage.
+ * - The 5-day inactivity check has been removed from the auth gate;
+ *   Supabase handles token expiry via refresh tokens automatically.
+ * - clearSession() is still called on logout for localStorage cleanup.
  */
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
-import { clearSession, isSessionAlive } from '@/lib/sessionPersistence';
+import { clearSession } from '@/lib/sessionPersistence';
 
 const AuthContext = createContext(undefined);
 
 export const AuthProvider = ({ children }) => {
   const { toast } = useToast();
 
-  const [user, setUser]       = useState(null);
+  const [user,    setUser]    = useState(null);
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // ── Session validity ───────────────────────────────────────────────────────
-  // We respect both Supabase's token AND our own 5-day inactivity window.
-  const isSessionValid = useCallback((currentSession) => {
-    if (!currentSession) return false;
-
-    // Our own inactivity gate
-    if (!isSessionAlive()) return false;
-
-    return true;
-  }, []);
-
   // ── Handle a session object from Supabase ─────────────────────────────────
+  // Trust the JWT directly — Supabase handles expiry and refresh.
   const handleSession = useCallback(async (currentSession) => {
-    if (currentSession && isSessionValid(currentSession)) {
+    if (currentSession) {
       setSession(currentSession);
       setUser(currentSession.user ?? null);
-    } else if (currentSession) {
-      // Supabase says we're logged in, but our inactivity rule disagrees
-      await supabase.auth.signOut();
-      clearSession('inactivity');
-      setSession(null);
-      setUser(null);
-      toast({
-        title: "Session Expired",
-        description: "You've been inactive for 5 days. Please log in again.",
-        variant: "default",
-      });
     } else {
       setSession(null);
       setUser(null);
     }
     setLoading(false);
-  }, [isSessionValid, toast]);
+  }, []);
 
   // ── Initialise auth on mount ──────────────────────────────────────────────
   useEffect(() => {
@@ -70,7 +54,6 @@ export const AuthProvider = ({ children }) => {
 
     initializeAuth();
 
-    // Listen for Supabase auth events
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, newSession) => {
         if (!mounted) return;
@@ -81,13 +64,13 @@ export const AuthProvider = ({ children }) => {
           setUser(null);
           setLoading(false);
         } else if (
-          event === 'SIGNED_IN'      ||
+          event === 'SIGNED_IN'       ||
           event === 'TOKEN_REFRESHED' ||
           event === 'INITIAL_SESSION'
         ) {
           await handleSession(newSession);
         }
-      }
+      },
     );
 
     return () => {
@@ -97,10 +80,12 @@ export const AuthProvider = ({ children }) => {
   }, [handleSession]);
 
   // ── Auth actions ──────────────────────────────────────────────────────────
+  // signUp and signIn are kept for completeness but CloudCampus uses
+  // the cloud-campus-auth Edge Function for all role-based logins.
   const signUp = useCallback(async (email, password, options) => {
     const { error } = await supabase.auth.signUp({ email, password, options });
     if (error) {
-      toast({ variant: "destructive", title: "Sign up Failed", description: error.message || "Something went wrong" });
+      toast({ variant: 'destructive', title: 'Sign up failed', description: error.message });
     }
     return { error };
   }, [toast]);
@@ -108,7 +93,7 @@ export const AuthProvider = ({ children }) => {
   const signIn = useCallback(async (email, password) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
-      toast({ variant: "destructive", title: "Sign in Failed", description: error.message || "Something went wrong" });
+      toast({ variant: 'destructive', title: 'Sign in failed', description: error.message });
     }
     return { error };
   }, [toast]);
@@ -117,12 +102,11 @@ export const AuthProvider = ({ children }) => {
     clearSession('logout');
     const { error } = await supabase.auth.signOut();
     if (error) {
-      toast({ variant: "destructive", title: "Sign out Failed", description: error.message || "Something went wrong" });
+      toast({ variant: 'destructive', title: 'Sign out failed', description: error.message });
     }
     return { error };
   }, [toast]);
 
-  // ── Context value ─────────────────────────────────────────────────────────
   const value = useMemo(() => ({
     user,
     session,

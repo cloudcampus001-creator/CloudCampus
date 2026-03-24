@@ -1,35 +1,45 @@
 /**
  * ProtectedRoute.jsx
  * ------------------
- * Guards dashboard routes.
- * Now validates the full session (including the 5-day inactivity window)
- * instead of just checking whether a localStorage key exists.
+ * Guards dashboard routes using a cryptographically signed Supabase JWT.
+ *
+ * BEFORE: Read userRole from localStorage → trivially forgeable.
+ * AFTER:  Read userRole from session.user.user_metadata → signed by Supabase,
+ *         cannot be tampered without the server secret.
+ *
+ * The SupabaseAuthContext handles the async session load + the loading state.
+ * By the time ProtectedRoute renders, the session is already resolved.
  */
 import React from 'react';
 import { Navigate } from 'react-router-dom';
-import { isSessionAlive, getSession } from '@/lib/sessionPersistence';
+import { useAuth } from '@/contexts/SupabaseAuthContext';
+import { FullPageLoader } from '@/components/ui/loading-spinner';
 
 const ProtectedRoute = ({ children, role }) => {
-  // ── 1. Is there a living, non-expired session? ────────────────────────────
-  if (!isSessionAlive()) {
-    // Session missing or expired — send to landing page
+  const { isAuthenticated, loading, session } = useAuth();
+
+  // Auth context is still initialising (Supabase getSession is async)
+  if (loading) {
+    return <FullPageLoader text="Verifying session…" />;
+  }
+
+  // No valid JWT → go to landing
+  if (!isAuthenticated) {
     return <Navigate to="/" replace />;
   }
 
-  // ── 2. Does the session role match what this route requires? ──────────────
-  const session = getSession();
-  const userRole = session?.userRole;
+  // Role comes from JWT user_metadata — server-signed, cannot be forged
+  const userRole = session?.user?.user_metadata?.role;
 
   if (!userRole) {
     return <Navigate to="/" replace />;
   }
 
   if (role && userRole !== role) {
-    // Wrong role — redirect to the root rather than leaking route info
+    // Authenticated but wrong role — redirect to root rather than leaking route info
     return <Navigate to="/" replace />;
   }
 
-  // ── 3. All good — render the protected content ───────────────────────────
   return children;
 };
 

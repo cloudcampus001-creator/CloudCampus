@@ -1,32 +1,88 @@
+/**
+ * AdministratorLoginPage.jsx
+ * --------------------------
+ * SECURITY FIX:
+ * - Replaced direct Supabase table query + plaintext password compare
+ *   with a call to the cloud-campus-auth Edge Function.
+ * - Password is verified server-side with PBKDF2 (auto-migrated from plaintext).
+ * - On success, calls supabase.auth.setSession() to issue a real JWT.
+ */
 import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Key, Lock, User } from 'lucide-react';
+import { Key, Lock, User, Loader2, Cloud, ArrowLeft } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { supabase } from '@/lib/customSupabaseClient';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
 import { Helmet } from 'react-helmet';
 import { saveSession } from '@/lib/sessionPersistence';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { LanguageSwitcher } from '@/components/LanguageSwitcher';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 const FROM = '#6366f1', TO = '#8b5cf6', GLOW = 'rgba(99,102,241,0.28)';
 
 const AdministratorLoginPage = () => {
-  const { schoolId } = useParams(); const navigate = useNavigate();
-  const { toast } = useToast(); const { t } = useLanguage();
-  const [form, setForm] = useState({ name:'', password:'' });
+  const { schoolId } = useParams();
+  const navigate     = useNavigate();
+  const { toast }    = useToast();
+  const { t }        = useLanguage();
+  const [form, setForm]     = useState({ name: '', password: '' });
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
-    e.preventDefault(); setLoading(true);
+    e.preventDefault();
+    setLoading(true);
     try {
-      const { data: admin, error } = await supabase.from('administrators').select('*')
-        .eq('name', form.name).eq('school_id', parseInt(schoolId)).single();
-      if (error || !admin || admin.password_hash !== form.password) throw new Error();
-      saveSession({ userRole:'administrator', userId:admin.id, userName:admin.name, schoolId });
-      toast({ title:'✓ '+t('loginSuccess'), className:'bg-indigo-500/10 border-indigo-500/50 text-indigo-400' });
+      // ── Step 1: Verify credentials server-side ───────────────────────────
+      const { data, error } = await supabase.functions.invoke('cloud-campus-auth', {
+        body: {
+          role:     'administrator',
+          name:     form.name,
+          password: form.password,
+          schoolId: String(schoolId),
+        },
+      });
+
+      if (error || data?.error) {
+        throw new Error(data?.error || 'Login failed');
+      }
+
+      const { session, userMeta } = data;
+
+      // ── Step 2: Set the real Supabase JWT (unforgeable) ──────────────────
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token:  session.access_token,
+        refresh_token: session.refresh_token,
+      });
+      if (sessionError) throw sessionError;
+
+      // ── Step 3: Mirror to localStorage for dashboard compatibility ───────
+      saveSession({
+        userRole: userMeta.role,
+        userId:   userMeta.userId,
+        userName: userMeta.userName,
+        schoolId: userMeta.schoolId,
+      });
+
+      toast({
+        title: '✓ ' + t('loginSuccess'),
+        className: 'bg-indigo-500/10 border-indigo-500/50 text-indigo-400',
+      });
       navigate('/dashboard/administrator');
-    } catch { toast({ variant:'destructive', title:t('loginFailed'), description:t('invalidCredentials') }); }
-    finally { setLoading(false); }
+
+    } catch (err) {
+      toast({
+        variant:     'destructive',
+        title:       t('loginFailed'),
+        description: err.message === 'Invalid credentials'
+          ? t('invalidCredentials')
+          : t('invalidCredentials'),
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -37,14 +93,24 @@ const AdministratorLoginPage = () => {
         icon={<Key className="h-7 w-7 text-indigo-400" />}>
         <form onSubmit={handleSubmit} className="space-y-5">
           <Field label={t('adminUsername')} icon={<User className="h-4 w-4" />}>
-            <Input type="text" placeholder={t('adminUsernamePlaceholder')} required
+            <Input
+              type="text"
+              placeholder={t('adminUsernamePlaceholder')}
+              required
               className="pl-10 h-12 bg-white/5 border-white/10 focus:border-indigo-500/60 rounded-xl"
-              value={form.name} onChange={e=>setForm({...form,name:e.target.value})} />
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+            />
           </Field>
           <Field label={t('passwordLabel')} icon={<Lock className="h-4 w-4" />}>
-            <Input type="password" placeholder={t('passwordPlaceholder')} required
+            <Input
+              type="password"
+              placeholder={t('passwordPlaceholder')}
+              required
               className="pl-10 h-12 bg-white/5 border-white/10 focus:border-indigo-500/60 rounded-xl"
-              value={form.password} onChange={e=>setForm({...form,password:e.target.value})} />
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+            />
           </Field>
           <Btn loading={loading} label={t('login')} loadingLabel={t('verifying')} from={FROM} to={TO} glow={GLOW} />
         </form>
@@ -52,13 +118,10 @@ const AdministratorLoginPage = () => {
     </>
   );
 };
+
 export default AdministratorLoginPage;
 
-import { motion } from "framer-motion";
-import { ArrowLeft, Cloud, Loader2 } from "lucide-react";
-import { Label } from "@/components/ui/label";
-import { LanguageSwitcher } from "@/components/LanguageSwitcher";
-import { ThemeToggle } from "@/components/ThemeToggle";
+// ─── Shared layout components (unchanged from original) ──────────────────────
 
 function Shell({ from, to, glow, schoolId, navigate, t, title, subtitle, icon, iconBg, children }) {
   return (
@@ -81,7 +144,6 @@ function Shell({ from, to, glow, schoolId, navigate, t, title, subtitle, icon, i
         <motion.div initial={{ opacity: 0, y: 20, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.45, ease: "easeOut" }} className="w-full max-w-md">
           <div className="relative glass rounded-3xl p-8 shadow-2xl border border-white/10 overflow-hidden" style={{ boxShadow: `0 24px 64px ${glow}` }}>
             <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-3xl" style={{ background: `linear-gradient(90deg,${from},${to})` }} />
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-px opacity-50" style={{ background: `linear-gradient(90deg,transparent,${from}80,transparent)` }} />
             <div className="mb-8 text-center space-y-3">
               <div className={"inline-flex p-4 rounded-2xl ring-1 ring-white/10 mb-1 " + iconBg}>{icon}</div>
               <h2 className="text-3xl font-black tracking-tight">{title}</h2>
