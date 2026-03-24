@@ -111,15 +111,17 @@ const PublishPage = () => {
         document_type: docType, school_id: parseInt(schoolId), created_at: new Date().toISOString(),
       });
       if (dbErr) throw new Error(dbErr.message);
-      // auto-notification
-      await supabase.from('notifications').insert({
-        sender_name: teacherName, sender_role: 'teacher',
-        title: `New ${docType}: ${subject || fileName}`,
-        content: `A new ${docType} "${fileName}" has been uploaded for ${subject || 'your class'}.`,
-        target_type: 'class', target_id: parseInt(selectedClass),
-        school_id: parseInt(schoolId), file_url: publicUrl, audience_type: 'parent',
-        expires_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-      }).catch(() => {}); // non-critical
+      // auto-notification (non-critical)
+      try {
+        await supabase.from('notifications').insert({
+          sender_name: teacherName, sender_role: 'teacher',
+          title: `New ${docType}: ${subject || fileName}`,
+          content: `A new ${docType} "${fileName}" has been uploaded for ${subject || 'your class'}.`,
+          target_type: 'class', target_id: parseInt(selectedClass),
+          school_id: parseInt(schoolId), file_url: publicUrl, audience_type: 'parent',
+          expires_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+        });
+      } catch {} // non-critical — don't block publish on notification failure
       toast({ title: `✓ ${t('success')}`, description: t('publishSuccess') });
       setFile(null); setFileName(''); setSelectedClass(''); setSubject('');
     } catch (err) {
