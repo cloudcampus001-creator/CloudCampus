@@ -3,18 +3,18 @@
  * -------
  * Root component.
  *
- * Key behaviours:
- * 1. On every app boot, if a valid (non-expired) session exists in
- *    localStorage, the user is automatically sent to their dashboard
- *    — no login needed.  This is what makes "remember me" work in
- *    the APK/WebView environment.
+ * FIXES:
+ * 1. useStartupRedirect now reads the role from the Supabase JWT
+ *    (session.user.user_metadata.role) instead of localStorage.
+ *    This is what was causing the Vercel redirect-to-landing bug:
+ *    - localStorage cc_session existed → redirected to /dashboard
+ *    - ProtectedRoute checked Supabase JWT → JWT refresh failed on
+ *      production because Supabase Site URL was localhost → no session
+ *      → redirected back to /
+ *    Now both hooks use the same source of truth (Supabase JWT).
  *
- * 2. A global activity tracker resets the 5-day inactivity timer on
- *    every click, keypress, or touch.
- *
- * ROUTING CHANGE (landing page):
- *    /               → LandingPage        (new marketing landing page)
- *    /select-school  → SchoolSelectionPage (school + role picker)
+ * 2. useStartupRedirect waits for the Supabase session to resolve
+ *    before attempting navigation, preventing the race condition.
  */
 import React, { useEffect } from 'react';
 import {
@@ -28,28 +28,27 @@ import { FullPageLoader } from '@/components/ui/loading-spinner';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { touchActivity, getSession } from '@/lib/sessionPersistence';
+import { touchActivity } from '@/lib/sessionPersistence';
 
 // Pages
-import LandingPage              from '@/pages/LandingPage';           // ← NEW
-import SchoolSelectionPage       from '@/pages/SchoolSelectionPage';
-import RoleSelectionPage         from '@/pages/RoleSelectionPage';
-import ParentLoginPage           from '@/pages/ParentLoginPage';
-import TeacherLoginPage          from '@/pages/TeacherLoginPage';
+import LandingPage              from '@/pages/LandingPage';
+import SchoolSelectionPage      from '@/pages/SchoolSelectionPage';
+import RoleSelectionPage        from '@/pages/RoleSelectionPage';
+import ParentLoginPage          from '@/pages/ParentLoginPage';
+import TeacherLoginPage         from '@/pages/TeacherLoginPage';
 import DisciplineMasterLoginPage from '@/pages/DisciplineMasterLoginPage';
-import VicePrincipalLoginPage    from '@/pages/VicePrincipalLoginPage';
-import AdministratorLoginPage    from '@/pages/AdministratorLoginPage';
-import ParentDashboard           from '@/pages/ParentDashboard';
-import TeacherDashboard          from '@/pages/TeacherDashboard';
-import DisciplineDashboard       from '@/pages/DisciplineDashboard';
-import VicePrincipalDashboard    from '@/pages/VicePrincipalDashboard';
-import AdminDashboard            from '@/pages/AdminDashboard';
-import AboutUsPage               from '@/pages/AboutUsPage';
-import ContactUsPage             from '@/pages/ContactUsPage';
-import CloudAIPage               from '@/pages/CloudAIPage';
-import ProtectedRoute            from '@/components/ProtectedRoute';
+import VicePrincipalLoginPage   from '@/pages/VicePrincipalLoginPage';
+import AdministratorLoginPage   from '@/pages/AdministratorLoginPage';
+import ParentDashboard          from '@/pages/ParentDashboard';
+import TeacherDashboard         from '@/pages/TeacherDashboard';
+import DisciplineDashboard      from '@/pages/DisciplineDashboard';
+import VicePrincipalDashboard   from '@/pages/VicePrincipalDashboard';
+import AdminDashboard           from '@/pages/AdminDashboard';
+import AboutUsPage              from '@/pages/AboutUsPage';
+import ContactUsPage            from '@/pages/ContactUsPage';
+import CloudAIPage              from '@/pages/CloudAIPage';
+import ProtectedRoute           from '@/components/ProtectedRoute';
 
-// Dashboard route map
 const DASHBOARD_MAP = {
   'parent':         '/dashboard/parent',
   'teacher':        '/dashboard/teacher',
@@ -62,50 +61,45 @@ const DASHBOARD_MAP = {
 
 // -----------------------------------------------------------------------------
 // Hook: startup redirect
-// Fires once on mount. Reads sessionPersistence directly — NOT Supabase auth —
-// because CloudCampus logins query the DB directly and never call
-// supabase.auth.signInWithPassword(). Supabase's isAuthenticated is therefore
-// always false, so we must check our own session store to auto-login.
+// Waits for the Supabase session to resolve, then reads the role from
+// the JWT user_metadata. This works identically on localhost and Vercel.
 // -----------------------------------------------------------------------------
 function useStartupRedirect() {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const navigate        = useNavigate();
+  const location        = useLocation();
+  const { session, loading } = useAuth();
 
   useEffect(() => {
+    // Wait until auth context has finished loading
+    if (loading) return;
+
     // Already in a dashboard — nothing to do
     if (location.pathname.startsWith('/dashboard')) return;
 
-    const session = getSession(); // returns null if missing or expired (>5 days)
+    // No valid Supabase session — stay on current page
     if (!session) return;
 
-    const target = DASHBOARD_MAP[session.userRole];
+    // Read role from the JWT (server-signed, cannot be forged)
+    const role = session.user?.user_metadata?.role;
+    if (!role) return;
+
+    const target = DASHBOARD_MAP[role];
     if (target) {
-      console.log(`[CloudCampus] Resuming session for "${session.userRole}" → ${target}`);
       navigate(target, { replace: true });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // intentionally empty — run once on mount only
+  }, [loading, session]); // re-runs when auth state resolves
 }
 
 // -----------------------------------------------------------------------------
-// Hook: activity tracker
-// Resets the 5-day inactivity timer on any user interaction.
+// Hook: activity tracker (no-op now, kept for compatibility)
 // -----------------------------------------------------------------------------
 function useActivityTracker() {
   useEffect(() => {
     const events  = ['click', 'keydown', 'touchstart', 'mousemove', 'scroll'];
     const handler = () => touchActivity();
-
-    events.forEach(evt =>
-      window.addEventListener(evt, handler, { passive: true })
-    );
-
-    // Fires when the user switches back to the app from another app / tab
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') touchActivity();
-    };
+    events.forEach(evt => window.addEventListener(evt, handler, { passive: true }));
+    const onVisible = () => { if (document.visibilityState === 'visible') touchActivity(); };
     document.addEventListener('visibilitychange', onVisible);
-
     return () => {
       events.forEach(evt => window.removeEventListener(evt, handler));
       document.removeEventListener('visibilitychange', onVisible);
@@ -143,8 +137,8 @@ const AppContent = () => {
 
       <Routes>
         {/* ── Public ──────────────────────────────────────────── */}
-        <Route path="/"              element={<LandingPage />} />          {/* ← landing page */}
-        <Route path="/select-school" element={<SchoolSelectionPage />} />  {/* ← school picker */}
+        <Route path="/"              element={<LandingPage />} />
+        <Route path="/select-school" element={<SchoolSelectionPage />} />
         <Route path="/about"         element={<AboutUsPage />} />
         <Route path="/contact"       element={<ContactUsPage />} />
         <Route path="/cloud-ai"      element={<CloudAIPage />} />
