@@ -1,9 +1,9 @@
 # Cloud Campus 
-CloudCampus is a comprehensive school management platform designed for Cameroonian schools, connecting administrators, vice principals, discipline masters, teachers, and parents through role-specific dashboards.
+CloudCampus is a comprehensive school management system connecting administrators, vice principals, discipline masters, teachers, and parents through role-specific dashboards.
 
 Key Features
  Academic Tools: Timetables auto-detect current classes; marks entry by sequence/subject with enrollment checks; document publishing (lessons/books).
- ​Discipline Flow: Parents submit justifications (with files); DMs approve/reject/punish; track absences/punishments.
- ​Communication: Role-based chat, targeted notifications (e.g., class-wide to parents), in-app toasts.
- ​Admin Controls: User/class/timetable/subject management; stats dashboards with charts.
-​
+ Discipline Flow: Parents submit justifications (with files); DMs approve/reject/punish; track absences/punishments.
+ Communication: Role-based chat, targeted notifications (e.g., class-wide to parents), in-app toasts, and mobile push notifications.
+ Admin Controls: User/class/timetable/subject management; stats dashboards with charts.
+ Bilingual: Full English and French language support built in.

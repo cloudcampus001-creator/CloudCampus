@@ -113,8 +113,14 @@ const LandingPage = () => {
   return (
     <>
       <Helmet>
-        <title>CloudCampus — Smart School Management</title>
-        <meta name="description" content="CloudCampus connects administrators, teachers, vice principals, discipline masters and parents in one seamless platform." />
+        <title>CloudCampus — School Management System</title>
+        <meta name="description" content="CloudCampus is a complete school management system. Connect administrators, teachers, vice principals, discipline masters and parents in one powerful platform. Timetables, marks, attendance, report cards — all in one place." />
+        <meta name="keywords" content="school management system, school administration software, student management, teacher portal, attendance tracking, report card generator, school notifications, e-logbook, school ERP, CloudCampus" />
+        <meta property="og:title" content="CloudCampus — School Management System" />
+        <meta property="og:description" content="The complete school management platform for every role — administrators, teachers, parents and staff." />
+        <meta property="og:image" content="https://cloudcampus237.com/logo.png" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary_large_image" />
         <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
       </Helmet>
 
@@ -241,7 +247,7 @@ const LandingPage = () => {
               <div className="text-white text-center lg:text-left">
                 <div className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 mb-8 cc-reveal" style={{background:'rgba(255,255,255,0.15)',border:'1px solid rgba(255,255,255,0.25)'}}>
                   <span className="w-2 h-2 rounded-full bg-pink-300 animate-pulse"></span>
-                  <span className="text-xs font-semibold tracking-wide">Now live across Cameroon 🇨🇲</span>
+                  <span className="text-xs font-semibold tracking-wide">Trusted by schools worldwide 🌍</span>
                 </div>
 
                 <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold leading-tight mb-6 cc-reveal cc-d1" style={{textShadow:'0 4px 20px rgba(0,0,0,0.2)'}}>
@@ -250,7 +256,7 @@ const LandingPage = () => {
                 </h1>
 
                 <p className="text-lg leading-relaxed mb-10 max-w-lg mx-auto lg:mx-0 cc-reveal cc-d2" style={{color:'rgba(255,255,255,0.8)'}}>
-                  CloudCampus unites administrators, teachers, vice principals, discipline masters and parents on one powerful platform — built for modern African schools.
+                  CloudCampus unites administrators, teachers, vice principals, discipline masters and parents on one powerful platform — built for modern schools everywhere.
                 </p>
 
                 <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start cc-reveal cc-d3">
@@ -319,6 +325,7 @@ const LandingPage = () => {
                   </div>
                 </div>
               </div>
+
             </div>
           </div>
 
@@ -334,7 +341,7 @@ const LandingPage = () => {
         {/* ══════════════ TRUSTED BY ══════════════ */}
         <section className="py-10 border-y border-gray-100 bg-gray-50">
           <div className="max-w-7xl mx-auto px-5 md:px-8">
-            <p className="text-center text-xs font-semibold tracking-widest text-gray-400 uppercase mb-6 cc-reveal">Designed for Cameroonian schools</p>
+            <p className="text-center text-xs font-semibold tracking-widest text-gray-400 uppercase mb-6 cc-reveal">Trusted by schools everywhere</p>
             <div className="flex flex-wrap justify-center items-center gap-8 md:gap-16">
               {['🏫 Government Secondary Schools','🎓 Technical Colleges','✝️ Mission Schools','🌍 Bilingual Institutions'].map((t,i) => (
                 <div key={i} className={`flex items-center gap-2 text-gray-400 font-semibold text-sm cc-reveal cc-d${i}`}>{t}</div>
@@ -538,7 +545,7 @@ const LandingPage = () => {
           <div className="max-w-7xl mx-auto px-5 md:px-8">
             <div className="text-center mb-16 cc-reveal">
               <span className="inline-block bg-pink-100 text-pink-600 font-semibold text-xs tracking-widest uppercase px-4 py-1.5 rounded-full mb-4">Testimonials</span>
-              <h2 className="text-3xl md:text-4xl font-extrabold text-blue-900 mb-4">Loved by schools across Cameroon</h2>
+              <h2 className="text-3xl md:text-4xl font-extrabold text-blue-900 mb-4">Loved by schools everywhere</h2>
             </div>
 
             <div className="grid md:grid-cols-3 gap-6">
@@ -583,11 +590,11 @@ const LandingPage = () => {
             <div className="grid lg:grid-cols-2 gap-16 items-center">
               <div className="cc-reveal">
                 <span className="inline-block bg-blue-50 text-blue-600 font-semibold text-xs tracking-widest uppercase px-4 py-1.5 rounded-full mb-4">Why CloudCampus</span>
-                <h2 className="text-3xl md:text-4xl font-extrabold text-blue-900 mb-8 leading-tight">Built for the realities of<br/>African education</h2>
+                <h2 className="text-3xl md:text-4xl font-extrabold text-blue-900 mb-8 leading-tight">Built for the realities of<br/>modern education</h2>
                 <div className="space-y-6">
                   {[
                     {bg:'bg-blue-50 group-hover:bg-blue-500',icon:<svg className="w-5 h-5 text-blue-500 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 18h.01M8 21h8a2 2 0 002-2v-2a2 2 0 00-2-2H8a2 2 0 00-2 2v2a2 2 0 002 2zM12 3a9 9 0 110 18 9 9 0 010-18z"/></svg>,title:'Works on any device',desc:'Web browser, mobile phone, or Android APK — CloudCampus adapts to whatever device your school has.'},
-                    {bg:'bg-pink-50 group-hover:bg-pink-500',icon:<svg className="w-5 h-5 text-pink-500 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/></svg>,title:'Bilingual — English & French',desc:'Full English and French support built in. Designed specifically for Cameroon\'s bilingual educational system.'},
+                    {bg:'bg-pink-50 group-hover:bg-pink-500',icon:<svg className="w-5 h-5 text-pink-500 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/></svg>,title:'Bilingual — English & French',desc:'Full English and French language support built in. Seamlessly switch between languages across every dashboard and role.'},
                     {bg:'bg-emerald-50 group-hover:bg-emerald-500',icon:<svg className="w-5 h-5 text-emerald-600 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>,title:'Secure & private by design',desc:'Every school\'s data is completely isolated. Sessions persist for 5 days — no constant re-logins on the APK.'},
                     {bg:'bg-violet-50 group-hover:bg-violet-500',icon:<svg className="w-5 h-5 text-violet-600 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>,title:'Instant setup, zero IT needed',desc:'No servers, no installation. The admin creates the school and the whole platform is ready in minutes.'},
                   ].map((b,i) => (
@@ -663,7 +670,6 @@ const LandingPage = () => {
             </div>
           </div>
         </section>
-
 
 
         {/* ══════════════ CONTACT ══════════════ */}
@@ -790,7 +796,7 @@ const LandingPage = () => {
                   </div>
                   <span className="text-lg font-bold">CloudCampus</span>
                 </div>
-                <p className="text-sm leading-relaxed max-w-sm mb-6" style={{color:'rgba(255,255,255,0.6)'}}>The smarter, modern way to manage schools in Africa. Connecting every stakeholder in one powerful platform.</p>
+                <p className="text-sm leading-relaxed max-w-sm mb-6" style={{color:'rgba(255,255,255,0.6)'}}>The smarter, modern way to manage your school. Connecting every stakeholder in one powerful platform.</p>
               </div>
               <div>
                 <h4 className="font-semibold text-xs uppercase tracking-widest mb-5" style={{color:'rgba(255,255,255,0.5)'}}>Product</h4>

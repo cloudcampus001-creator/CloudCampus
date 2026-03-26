@@ -182,8 +182,9 @@ function App() {
     <AuthProvider>
       <Router>
         <Helmet>
-          <title>CloudCampus - Modern School Management</title>
-          <meta name="description" content="CloudCampus: The future of school administration" />
+          <title>CloudCampus — School Management System</title>
+          <meta name="description" content="CloudCampus is a complete school management system for administrators, teachers, parents and staff. Manage timetables, marks, attendance, discipline and notifications in one platform." />
+          <meta name="robots" content="index, follow" />
         </Helmet>
         <AppContent />
       </Router>
