@@ -3,11 +3,12 @@
  */
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import {
   Users, Bell, Calendar, GraduationCap, UserCheck,
   AlertCircle, Trash2, Send, Loader2, ChevronDown,
   ChevronUp, Sparkles, TrendingUp, Plus, X, Radio,
-  BookOpen, Shield,
+  BookOpen, Shield, ChevronRight,
 } from 'lucide-react';
 import { Helmet } from 'react-helmet';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -85,10 +86,25 @@ const AdminHome = () => {
   const [showForm,      setShowForm]           = useState(false);
   const [showBroadcasts,setShowBroadcasts]     = useState(false);
 
+  // ─── PATCH 6: Year status state ──────────────────────────────────────────
+  const [yearStatus, setYearStatus] = useState(null);
+
   /* ── fetch ── */
   useEffect(() => {
-    if (schoolId) { fetchDashboardData(); fetchNotifications(); }
+    if (schoolId) { fetchDashboardData(); fetchNotifications(); fetchYearStatus(); }
   }, [schoolId]);
+
+  // ─── PATCH 6: Fetch current academic year ────────────────────────────────
+  const fetchYearStatus = async () => {
+    const { data } = await supabase
+      .from('academic_years')
+      .select('id, name, status, is_current, start_date, end_date')
+      .eq('school_id', parseInt(schoolId))
+      .eq('is_current', true)
+      .limit(1)
+      .single();
+    if (data) setYearStatus(data);
+  };
 
   const fetchDashboardData = async () => {
     try {
@@ -161,6 +177,21 @@ const AdminHome = () => {
       <Helmet><title>{t('administratorLabel')} · CloudCampus</title></Helmet>
 
       <motion.div variants={stagger} initial="hidden" animate="visible" className="space-y-8 pb-6">
+
+        {/* ─── PATCH 6: Active Academic Year banner ──────────────────────── */}
+        {yearStatus?.is_current && (
+          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+            className="glass rounded-2xl p-3 border border-emerald-500/20 bg-emerald-500/5 flex items-center gap-3 mb-4">
+            <div className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+            <p className="text-sm font-bold flex-1">
+              Active Year: <span className="text-emerald-400">{yearStatus.name}</span>
+            </p>
+            <Link to="/dashboard/administrator/academic-year"
+              className="text-xs font-bold text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+              Manage <ChevronRight className="h-3 w-3" />
+            </Link>
+          </motion.div>
+        )}
 
         {/* ── Greeting ── */}
         <motion.div variants={fadeUp} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
