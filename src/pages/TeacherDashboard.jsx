@@ -226,16 +226,20 @@ const TeacherDashboard = () => {
 
       {/* ── Main ────────────────────────────────────────── */}
       <main className="flex-1 p-4 md:p-8 pb-28 md:pb-8 overflow-y-auto h-[calc(100vh-56px)] md:h-screen scroll-smooth">
-        <AnimatePresence mode="wait">
-          <Routes location={location} key={location.pathname}>
-            <Route path="/"              element={<TeacherHomePage unreadCount={unreadCount} />} />
-            <Route path="/activity"      element={<ActivityPage />} />
-            <Route path="/marks"         element={<MarksPage />} />
-            <Route path="/publish"       element={<PublishPage />} />
-            <Route path="/chat"          element={<TeacherChatPage />} />
-            <Route path="/notifications" element={<TeacherNotificationsPage />} />
-          </Routes>
-        </AnimatePresence>
+        {!yearLoading && yearIsClosed ? (
+          <TeacherYearClosedPage closedYear={yearStatus.year} />
+        ) : (
+          <AnimatePresence mode="wait">
+            <Routes location={location} key={location.pathname}>
+              <Route path="/"              element={<TeacherHomePage unreadCount={unreadCount} />} />
+              <Route path="/activity"      element={<ActivityPage />} />
+              <Route path="/marks"         element={<MarksPage />} />
+              <Route path="/publish"       element={<PublishPage />} />
+              <Route path="/chat"          element={<TeacherChatPage />} />
+              <Route path="/notifications" element={<TeacherNotificationsPage />} />
+            </Routes>
+          </AnimatePresence>
+        )}
       </main>
 
       {/* ── Mobile Nav — 5 tabs ──────────────────────────── */}

@@ -242,16 +242,20 @@ const ParentDashboard = () => {
 
       {/* ── Main ────────────────────────────────────────── */}
       <main className="flex-1 p-4 md:p-8 pb-28 md:pb-8 overflow-y-auto h-[calc(100vh-56px)] md:h-screen scroll-smooth">
-        <AnimatePresence mode="wait">
-          <Routes location={location} key={location.pathname}>
-            <Route path="/"              element={<OverviewPage unreadCount={unreadCount} />} />
-            <Route path="/docs"          element={<DocsPage />} />
-            <Route path="/discipline"    element={<DisciplinePage />} />
-            <Route path="/library"       element={<LibraryPage />} />
-            <Route path="/chat"          element={<ChatPage />} />
-            <Route path="/notifications" element={<ParentNotificationsPage />} />
-          </Routes>
-        </AnimatePresence>
+        {!yearLoading && yearIsClosed ? (
+          <ParentYearEndPage closedYear={yearStatus.year} />
+        ) : (
+          <AnimatePresence mode="wait">
+            <Routes location={location} key={location.pathname}>
+              <Route path="/"              element={<OverviewPage unreadCount={unreadCount} />} />
+              <Route path="/docs"          element={<DocsPage />} />
+              <Route path="/discipline"    element={<DisciplinePage />} />
+              <Route path="/library"       element={<LibraryPage />} />
+              <Route path="/chat"          element={<ChatPage />} />
+              <Route path="/notifications" element={<ParentNotificationsPage />} />
+            </Routes>
+          </AnimatePresence>
+        )}
       </main>
 
       {/* ── Mobile Floating Nav — 5 tabs ────────────────── */}

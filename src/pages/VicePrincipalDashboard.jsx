@@ -274,17 +274,21 @@ const VicePrincipalDashboard = () => {
 
       {/* ── Main ────────────────────────────────────── */}
       <main className="flex-1 p-4 md:p-8 pb-28 md:pb-8 overflow-y-auto h-[calc(100vh-56px)] md:h-screen scroll-smooth">
-        <AnimatePresence mode="wait">
-          <Routes location={location} key={location.pathname}>
-            <Route path="/"                   element={<VPHome            selectedClass={selectedClassId} unreadCount={unreadCount} />} />
-            <Route path="/logbooks"           element={<VPLogbookPage     selectedClass={selectedClassId} />} />
-            <Route path="/attribute-subjects" element={<AttributeSubjectsPage selectedClass={selectedClassId} />} />
-            <Route path="/marks"              element={<VPMarksPage       selectedClass={selectedClassId} />} />
-            <Route path="/chat"               element={<VPChatPage        selectedClass={selectedClassId} />} />
-            <Route path="/notify"             element={<VPNotifyPage      selectedClass={selectedClassId} />} />
-            <Route path="/notifications"      element={<VPNotificationsPage />} />
-          </Routes>
-        </AnimatePresence>
+        {!yearLoading && yearIsClosed ? (
+          <VPYearClosedPage closedYear={yearStatus.year} />
+        ) : (
+          <AnimatePresence mode="wait">
+            <Routes location={location} key={location.pathname}>
+              <Route path="/"                   element={<VPHome            selectedClass={selectedClassId} unreadCount={unreadCount} />} />
+              <Route path="/logbooks"           element={<VPLogbookPage     selectedClass={selectedClassId} />} />
+              <Route path="/attribute-subjects" element={<AttributeSubjectsPage selectedClass={selectedClassId} />} />
+              <Route path="/marks"              element={<VPMarksPage       selectedClass={selectedClassId} />} />
+              <Route path="/chat"               element={<VPChatPage        selectedClass={selectedClassId} />} />
+              <Route path="/notify"             element={<VPNotifyPage      selectedClass={selectedClassId} />} />
+              <Route path="/notifications"      element={<VPNotificationsPage />} />
+            </Routes>
+          </AnimatePresence>
+        )}
       </main>
 
       {/* ── Mobile Nav ──────────────────────────────── */}

@@ -249,15 +249,19 @@ const DisciplineDashboard = () => {
 
       {/* ── Main content ─────────────────────────────────── */}
       <main className="flex-1 p-4 md:p-8 pb-28 md:pb-8 overflow-y-auto h-[calc(100vh-56px)] md:h-screen scroll-smooth">
-        <Routes>
-          <Route path="/"              element={<DisciplineHome unreadCount={unreadCount} />} />
-          <Route path="/registers"     element={<RegisterReviewPage />} />
-          <Route path="/punishments"   element={<PunishPage />} />
-          <Route path="/justifications"element={<JustificationsPage />} />
-          <Route path="/notifications" element={<DisciplineNotificationsPage />} />
-          <Route path="/chat"          element={<DisciplineChatPage />} />
-          <Route path="*"              element={<DisciplineHome unreadCount={unreadCount} />} />
-        </Routes>
+        {!yearLoading && yearIsClosed ? (
+          <DisciplineYearClosedPage closedYear={yearStatus.year} />
+        ) : (
+          <Routes>
+            <Route path="/"              element={<DisciplineHome unreadCount={unreadCount} />} />
+            <Route path="/registers"     element={<RegisterReviewPage />} />
+            <Route path="/punishments"   element={<PunishPage />} />
+            <Route path="/justifications"element={<JustificationsPage />} />
+            <Route path="/notifications" element={<DisciplineNotificationsPage />} />
+            <Route path="/chat"          element={<DisciplineChatPage />} />
+            <Route path="*"              element={<DisciplineHome unreadCount={unreadCount} />} />
+          </Routes>
+        )}
       </main>
 
       {/* ── Mobile bottom nav ────────────────────────────── */}
