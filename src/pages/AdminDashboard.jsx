@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { Home, Users, LogOut, Menu, Cloud, CalendarClock, MessageSquare, School, BookMarked, MapPin, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -10,7 +11,6 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDeviceNotifications } from '@/hooks/useDeviceNotifications';
-import { supabase } from '@/lib/customSupabaseClient';
 import ProfileSheet from '@/components/ProfileSheet';
 import AdminHome from '@/pages/admin/AdminHome';
 import AdminUsersPage from '@/pages/admin/AdminUsersPage';
@@ -20,9 +20,9 @@ import AdminClassesPage from '@/pages/admin/AdminClassesPage';
 import AdminSubjectsLibraryPage from '@/pages/admin/AdminSubjectsLibraryPage';
 import AdminSchoolSettingsPage  from '@/pages/admin/AdminSchoolSettingsPage';
 import AdminReportTemplatePage from '@/pages/admin/AdminReportTemplatePage';
-// ─── PATCH 1: New imports ───────────────────────────────────────────────────
 import AdminAcademicYearPage from '@/pages/admin/AdminAcademicYearPage';
-import YearClosedDashboard   from '@/components/YearClosedDashboard';
+import AdminYearClosedPage   from '@/pages/admin/AdminYearClosedPage';
+import { useYearStatus }      from '@/hooks/useYearStatus';
 
 const getInitials = (name = '') => name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'A';
 const ACCENT = { from: 'from-indigo-500', to: 'to-violet-500', glow: 'shadow-indigo-500/40', text: 'text-indigo-400', ring: 'ring-indigo-500/30', mobileActive: 'bg-indigo-500/15', iconGlow: 'drop-shadow-[0_0_8px_rgba(99,102,241,0.9)]' };
@@ -30,54 +30,22 @@ const ACCENT = { from: 'from-indigo-500', to: 'to-violet-500', glow: 'shadow-ind
 const AdminDashboard = () => {
   const location = useLocation(); const navigate = useNavigate(); const { signOut } = useAuth(); const { t } = useLanguage();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
+  const { yearStatus, loading: yearLoading } = useYearStatus();
+  const yearIsClosed = yearStatus?.status === 'closed';
   const [profileOpen, setProfileOpen] = React.useState(false);
   useDeviceNotifications();
   const userName = localStorage.getItem('userName') || t('administratorLabel');
-  const schoolId = localStorage.getItem('schoolId');
-
-  // ─── PATCH 3: Year-closed detection hook ─────────────────────────────────
-  const [yearClosed, setYearClosed] = useState(false);
-  const [yearChecked, setYearChecked] = useState(false);
-
-  useEffect(() => {
-    const checkYear = async () => {
-      const { data } = await supabase
-        .from('academic_years')
-        .select('status, is_current')
-        .eq('school_id', parseInt(schoolId))
-        .eq('is_current', false)
-        .eq('status', 'closed')
-        .order('end_date', { ascending: false })
-        .limit(1);
-
-      // Year is "closed mode" if: last year is closed AND no current open year exists
-      const { data: current } = await supabase
-        .from('academic_years')
-        .select('id')
-        .eq('school_id', parseInt(schoolId))
-        .eq('is_current', true)
-        .limit(1);
-
-      setYearClosed((!current || current.length === 0) && data?.length > 0);
-      setYearChecked(true);
-    };
-    if (schoolId) checkYear();
-  }, [schoolId]);
-
-  // ─── PATCH 2: Updated navItems with Academic Year entry ──────────────────
   const navItems = [
-    { icon: Home,         label: t('overview'),                path: '/dashboard/administrator',                     shortLabel: t('adminShortHome') },
-    { icon: Users,        label: t('users'),                   path: '/dashboard/administrator/users',               shortLabel: t('adminShortUsers') },
-    { icon: School,       label: t('adminClasses'),            path: '/dashboard/administrator/classes',             shortLabel: t('adminShortClasses') },
-    { icon: BookMarked,   label: t('adminSubjects'),           path: '/dashboard/administrator/subjects',            shortLabel: t('adminShortSubjects') },
-    { icon: CalendarClock,label: 'Academic Year',              path: '/dashboard/administrator/academic-year',       shortLabel: 'Year' },
-    { icon: CalendarClock,label: t('timetables'),              path: '/dashboard/administrator/timetables',          shortLabel: t('adminShortTime') },
+    { icon: Home,         label: t('overview'),       path: '/dashboard/administrator',              shortLabel: t('adminShortHome') },
+    { icon: Users,        label: t('users'),           path: '/dashboard/administrator/users',        shortLabel: t('adminShortUsers') },
+    { icon: School,       label: t('adminClasses'),    path: '/dashboard/administrator/classes',      shortLabel: t('adminShortClasses') },
+    { icon: BookMarked,   label: t('adminSubjects'),   path: '/dashboard/administrator/subjects',     shortLabel: t('adminShortSubjects') },
+    { icon: CalendarClock,label: 'Academic Year',         path: '/dashboard/administrator/academic-year',  shortLabel: 'Year' },
+    { icon: CalendarClock,label: t('timetables'),      path: '/dashboard/administrator/timetables',   shortLabel: t('adminShortTime') },
     { icon: MapPin,       label: t('schoolSettings') || 'School Settings', path: '/dashboard/administrator/school', shortLabel: 'Location' },
-    { icon: FileText,     label: t('reportTemplateNav') || 'Report Template', path: '/dashboard/administrator/report-template', shortLabel: 'Report' },
-    { icon: Cloud,        label: t('cloudAI') || 'Cloud AI',  path: '/dashboard/administrator/chat',                shortLabel: 'AI' },
-    { icon: MessageSquare,label: t('messages') || 'Messages', path: '/dashboard/administrator/messages',            shortLabel: t('adminShortChat') },
+    { icon: FileText,     label: t('reportTemplateNav') || 'Report Template',  path: '/dashboard/administrator/report-template', shortLabel: t('reportTemplateNav') ? t('reportTemplateNav').slice(0,8) : 'Template' },
+    { icon: MessageSquare,label: t('systemChat'),      path: '/dashboard/administrator/chat',         shortLabel: t('adminShortChat') },
   ];
-
   const handleSignOut = async () => { await signOut(); localStorage.clear(); navigate('/'); };
   const isActive = (p) => p === '/dashboard/administrator' ? location.pathname === p : location.pathname.startsWith(p);
 
@@ -129,26 +97,16 @@ const AdminDashboard = () => {
 
       <main className="flex-1 p-4 md:p-8 pb-28 md:pb-8 overflow-y-auto h-[calc(100vh-56px)] md:h-screen scroll-smooth">
         <Routes>
-          {/* ─── PATCH 5: Wrap index route with year-closed detection ─────── */}
-          <Route path="/" element={
-            yearChecked && yearClosed
-              ? <YearClosedDashboard role="administrator" />
-              : <AdminHome />
-          } />
+          <Route index element={!yearLoading && yearIsClosed ? <AdminYearClosedPage closedYear={yearStatus.year} /> : <AdminHome />} />
           <Route path="/users"      element={<AdminUsersPage />} />
           <Route path="/classes"    element={<AdminClassesPage />} />
           <Route path="/timetables" element={<AdminTimetablePage />} />
           <Route path="/subjects"   element={<AdminSubjectsLibraryPage />} />
-          <Route path="/school"     element={<AdminSchoolSettingsPage />} />
-          <Route path="/report-template" element={<AdminReportTemplatePage />} />
-          {/* ─── PATCH 4: New Academic Year route ─────────────────────────── */}
-          <Route path="/academic-year" element={<AdminAcademicYearPage />} />
-          <Route path="/chat"       element={<AdminChatPage />} />
-          <Route path="*"           element={
-            yearChecked && yearClosed
-              ? <YearClosedDashboard role="administrator" />
-              : <AdminHome />
-          } />
+          <Route path="/school"           element={<AdminSchoolSettingsPage />} />
+          <Route path="/report-template"  element={<AdminReportTemplatePage />} />
+          <Route path="academic-year" element={<AdminAcademicYearPage />} />
+          <Route path="chat"          element={<AdminChatPage />} />
+          <Route path="*" element={!yearLoading && yearIsClosed ? <AdminYearClosedPage closedYear={yearStatus.year} /> : <AdminHome />} />
         </Routes>
       </main>
 
@@ -170,3 +128,4 @@ const AdminDashboard = () => {
   );
 };
 export default AdminDashboard;
+

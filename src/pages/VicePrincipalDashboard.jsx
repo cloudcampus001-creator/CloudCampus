@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -23,6 +24,8 @@ import VPChatPage            from '@/pages/vice_principal/VPChatPage';
 import AttributeSubjectsPage from '@/pages/vice_principal/AttributeSubjectsPage';
 import VPNotifyPage          from '@/pages/vice_principal/VPNotifyPage';
 import VPNotificationsPage   from '@/pages/vice_principal/VPNotificationsPage';
+import VPYearClosedPage        from '@/pages/vice_principal/VPYearClosedPage';
+import { useYearStatus }        from '@/hooks/useYearStatus';
 
 const getInitials = (name = '') =>
   name.split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'VP';
@@ -44,6 +47,8 @@ const UnreadDot = ({ count }) => {
 };
 
 const VicePrincipalDashboard = () => {
+  const { yearStatus, loading: yearLoading } = useYearStatus();
+  const yearIsClosed = yearStatus?.status === 'closed';
   const location    = useLocation();
   const navigate    = useNavigate();
   const { signOut } = useAuth();

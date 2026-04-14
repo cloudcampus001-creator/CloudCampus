@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { Home, FileText, LogOut, Menu, Cloud, CheckSquare, Scale, MessageSquare, Bell } from 'lucide-react';
@@ -19,6 +20,8 @@ import PunishPage               from '@/pages/discipline/PunishPage';
 import JustificationsPage       from '@/pages/discipline/JustificationsPage';
 import DisciplineChatPage       from '@/pages/discipline/DisciplineChatPage';
 import DisciplineNotificationsPage from '@/pages/discipline/DisciplineNotificationsPage';
+import DisciplineYearClosedPage   from '@/pages/discipline/DisciplineYearClosedPage';
+import { useYearStatus }           from '@/hooks/useYearStatus';
 
 const getInitials = (name = '') =>
   name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'DM';
@@ -41,6 +44,8 @@ const UnreadDot = ({ count }) => {
 };
 
 const DisciplineDashboard = () => {
+  const { yearStatus, loading: yearLoading } = useYearStatus();
+  const yearIsClosed = yearStatus?.status === 'closed';
   const location    = useLocation();
   const navigate    = useNavigate();
   const { signOut } = useAuth();

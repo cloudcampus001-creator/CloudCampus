@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { Home, FileText, Shield, BookOpen, MessageSquare, LogOut, Menu, Cloud } from 'lucide-react';
@@ -19,6 +20,8 @@ import DisciplinePage          from '@/pages/parent/DisciplinePage';
 import LibraryPage             from '@/pages/parent/LibraryPage';
 import ChatPage                from '@/pages/parent/ChatPage';
 import ParentNotificationsPage from '@/pages/parent/ParentNotificationsPage';
+import ParentYearEndPage       from '@/pages/parent/ParentYearEndPage';
+import { useYearStatus }        from '@/hooks/useYearStatus';
 
 const getInitials = (name = '') =>
   name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'P';
@@ -41,6 +44,8 @@ const UnreadDot = ({ count }) => {
 };
 
 const ParentDashboard = () => {
+  const { yearStatus, loading: yearLoading } = useYearStatus();
+  const yearIsClosed = yearStatus?.status === 'closed';
   const location    = useLocation();
   const navigate    = useNavigate();
   const { signOut } = useAuth();

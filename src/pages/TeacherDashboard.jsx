@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { Home, Activity, GraduationCap, Upload, MessageSquare, LogOut, Menu, Cloud } from 'lucide-react';
@@ -19,6 +20,8 @@ import MarksPage               from '@/pages/teacher/MarksPage';
 import PublishPage             from '@/pages/teacher/PublishPage';
 import TeacherChatPage         from '@/pages/teacher/TeacherChatPage';
 import TeacherNotificationsPage from '@/pages/teacher/TeacherNotificationsPage';
+import TeacherYearClosedPage    from '@/pages/teacher/TeacherYearClosedPage';
+import { useYearStatus }         from '@/hooks/useYearStatus';
 
 const getInitials = (name = '') =>
   name.split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'T';
@@ -41,6 +44,8 @@ const UnreadDot = ({ count }) => {
 };
 
 const TeacherDashboard = () => {
+  const { yearStatus, loading: yearLoading } = useYearStatus();
+  const yearIsClosed = yearStatus?.status === 'closed';
   const location    = useLocation();
   const navigate    = useNavigate();
   const { signOut } = useAuth();
