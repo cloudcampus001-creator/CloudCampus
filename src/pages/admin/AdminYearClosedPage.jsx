@@ -138,7 +138,7 @@ const AdminYearClosedPage = ({ closedYear }) => {
             {[
               { step: 1, text: 'Go to Academic Year Engine → create new year with dates & thresholds', done: false },
               { step: 2, text: 'Add terms (trimestres/semesters) and sequences inside each term', done: false },
-              { step: 3, text: 'Activate the new year — all users' dashboards will update immediately', done: false },
+              { step: 3, text: "Activate the new year — all users' dashboards will update immediately", done: false },
               { step: 4, text: 'Monitor parent enrollment decisions in Year-End Mode', done: false },
             ].map(item => (
               <div key={item.step} className="flex items-center gap-3">
