@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -13,7 +12,7 @@ import { cn } from '@/lib/utils';
 const DecisionBanner = ({ decision }) => {
   const config = {
     promoted:  { icon: TrendingUp,    bg: 'from-emerald-500/15 to-teal-500/10', border: 'border-emerald-500/25', icon_color: 'text-emerald-400', text: 'text-emerald-300', label: 'Promoted! 🎉',     desc: 'Congratulations! Your child passed and will advance to the next class.' },
-    council:   { icon: Minus,         bg: 'from-amber-500/10  to-orange-500/5',  border: 'border-amber-500/25',  icon_color: 'text-amber-400',   text: 'text-amber-300',   label: 'Council Decision',desc: 'The VP deliberated your child's case. A final decision will be communicated shortly.' },
+    council:   { icon: Minus,         bg: 'from-amber-500/10  to-orange-500/5',  border: 'border-amber-500/25',  icon_color: 'text-amber-400',   text: 'text-amber-300',   label: 'Council Decision',desc: "The VP deliberated your child's case. A final decision will be communicated shortly." },
     repeating: { icon: TrendingDown,  bg: 'from-red-500/10    to-red-500/5',     border: 'border-red-500/20',    icon_color: 'text-red-400',     text: 'text-red-300',     label: 'Repeating',        desc: 'Your child will repeat the same class next academic year.' },
     excluded:  { icon: AlertTriangle, bg: 'from-red-900/20    to-red-800/10',    border: 'border-red-500/20',    icon_color: 'text-red-400',     text: 'text-red-300',     label: 'Excluded',         desc: 'Your child has been excluded due to unjustified absences. Please contact the school urgently.' },
   };
