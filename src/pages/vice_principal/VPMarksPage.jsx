@@ -21,8 +21,15 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
 import PageTransition from '@/components/PageTransition';
 
-/* ── constants: sequences loaded dynamically from DB ────── */
-// SEQUENCES removed — now fetched from the `sequences` table per academic year
+/* ── constants ─────────────────────────────────────────── */
+const SEQUENCES = [
+  { value: 'Sequence 1', label: '1st Sequence' },
+  { value: 'Sequence 2', label: '2nd Sequence' },
+  { value: 'Sequence 3', label: '3rd Sequence' },
+  { value: 'Sequence 4', label: '4th Sequence' },
+  { value: 'Sequence 5', label: '5th Sequence' },
+  { value: 'Sequence 6', label: '6th Sequence' },
+];
 
 /* ── helpers ───────────────────────────────────────────── */
 function ordinal(n) {
@@ -223,10 +230,13 @@ function OrganizedView({ marks, t }) {
     grouped[seq][sub].rows.push({ name: m.students?.name || m.student_matricule || '—', mark: m.mark, total: m.total_marks });
   });
   Object.values(grouped).forEach(subjects => Object.values(subjects).forEach(s => s.rows.sort((a, b) => a.name.localeCompare(b.name))));
-  const seqOrder = (dbSequences.length > 0
-    ? dbSequences.map(s => s.name)
-    : ['Sequence 1','Sequence 2','Sequence 3','Sequence 4','Sequence 5','Sequence 6']
-  ).filter(v => grouped[v]);
+  // Derive sequence order from the marks data directly — no hardcoded list needed
+  const seqOrder = Object.keys(grouped).sort((a, b) => {
+    // Try to sort by sequence number embedded in the name
+    const numA = parseInt(a.replace(/\D/g, '')) || 0;
+    const numB = parseInt(b.replace(/\D/g, '')) || 0;
+    return numA - numB || a.localeCompare(b);
+  });
   if (!seqOrder.length) return <p className="text-center py-8 text-muted-foreground text-sm">{t('noMarksYet')}</p>;
 
   return (
@@ -359,23 +369,19 @@ const VPMarksPage = ({ selectedClass }) => {
 
   const [selectedSeqs, setSelectedSeqs] = useState([]);
   const [generating,   setGenerating]   = useState(false);
-  const [dbSequences,  setDbSequences]  = useState([]);   // from sequences table
+  const [dbSequences,  setDbSequences]  = useState([]); // live sequences from DB
 
-  // Load sequences from DB for current year
+  // Load sequences from the current academic year
   useEffect(() => {
-    const schoolId = localStorage.getItem('schoolId');
-    if (!schoolId) return;
+    const sid = localStorage.getItem('schoolId');
+    if (!sid) return;
     supabase.from('academic_years').select('id')
-      .eq('school_id', parseInt(schoolId)).eq('is_current', true).maybeSingle()
+      .eq('school_id', parseInt(sid)).eq('is_current', true).eq('status', 'open').maybeSingle()
       .then(({ data: year }) => {
         if (!year) return;
-        supabase.from('sequences').select('*, terms(name)')
-          .eq('school_id', parseInt(schoolId))
-          .eq('academic_year_id', year.id)
-          .order('sequence_index')
-          .then(({ data: seqs }) => {
-            setDbSequences(seqs || []);
-          });
+        supabase.from('sequences').select('id, name, status, sequence_index, terms(name)')
+          .eq('school_id', parseInt(sid)).eq('academic_year_id', year.id).order('sequence_index')
+          .then(({ data: seqs }) => { if (seqs?.length) setDbSequences(seqs); });
       });
   }, []);
   const [reportCards,  setReportCards]  = useState([]);
@@ -718,7 +724,10 @@ tfoot .tot{background:#faf5ff;font-weight:600}
                     <p className="text-xs text-muted-foreground mt-1">{t('step1Desc')}</p>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {SEQUENCES.map(seq => (
+                    {(dbSequences.length > 0
+                      ? dbSequences.map(s => ({ value: s.name, label: s.name, status: s.status }))
+                      : SEQUENCES
+                    ).map(seq => (
                       <label key={seq.value} className={cn(
                         'flex items-center gap-3 p-3 rounded-xl border cursor-pointer select-none transition-all',
                         selectedSeqs.includes(seq.value)
@@ -728,7 +737,15 @@ tfoot .tot{background:#faf5ff;font-weight:600}
                         <input type="checkbox" checked={selectedSeqs.includes(seq.value)}
                           onChange={() => toggleSeq(seq.value)}
                           className="w-4 h-4 rounded accent-purple-500 shrink-0 cursor-pointer" />
-                        <span className="text-sm font-medium">{seq.label}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm font-medium">{seq.label}</span>
+                          {seq.status && seq.status !== 'open' && (
+                            <span className={cn('text-[10px] font-bold',
+                              seq.status === 'closed' ? 'text-muted-foreground/60' : 'text-amber-400')}>
+                              ({seq.status})
+                            </span>
+                          )}
+                        </div>
                       </label>
                     ))}
                   </div>
