@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Home, BookOpen, BookMarked, GraduationCap, MessageSquare,
-  LogOut, Menu, Cloud,
+  LogOut, Menu, Cloud, Trophy,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
@@ -25,6 +25,7 @@ import AttributeSubjectsPage from '@/pages/vice_principal/AttributeSubjectsPage'
 import VPNotifyPage          from '@/pages/vice_principal/VPNotifyPage';
 import VPNotificationsPage   from '@/pages/vice_principal/VPNotificationsPage';
 import VPYearClosedPage        from '@/pages/vice_principal/VPYearClosedPage';
+import VPPromotionPage        from '@/pages/vice_principal/VPPromotionPage';
 import { useYearStatus }        from '@/hooks/useYearStatus';
 
 const getInitials = (name = '') =>

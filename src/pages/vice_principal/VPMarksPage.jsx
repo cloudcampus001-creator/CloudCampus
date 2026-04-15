@@ -1,3 +1,4 @@
+
 /**
  * VPMarksPage.jsx — Vice Principal
  * Marksheet tab: Organized (accordion) or Flat table
@@ -20,15 +21,8 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
 import PageTransition from '@/components/PageTransition';
 
-/* ── constants ─────────────────────────────────────────── */
-const SEQUENCES = [
-  { value: 'Sequence 1', label: '1st Sequence' },
-  { value: 'Sequence 2', label: '2nd Sequence' },
-  { value: 'Sequence 3', label: '3rd Sequence' },
-  { value: 'Sequence 4', label: '4th Sequence' },
-  { value: 'Sequence 5', label: '5th Sequence' },
-  { value: 'Sequence 6', label: '6th Sequence' },
-];
+/* ── constants: sequences loaded dynamically from DB ────── */
+// SEQUENCES removed — now fetched from the `sequences` table per academic year
 
 /* ── helpers ───────────────────────────────────────────── */
 function ordinal(n) {
@@ -229,7 +223,10 @@ function OrganizedView({ marks, t }) {
     grouped[seq][sub].rows.push({ name: m.students?.name || m.student_matricule || '—', mark: m.mark, total: m.total_marks });
   });
   Object.values(grouped).forEach(subjects => Object.values(subjects).forEach(s => s.rows.sort((a, b) => a.name.localeCompare(b.name))));
-  const seqOrder = SEQUENCES.map(s => s.value).filter(v => grouped[v]);
+  const seqOrder = (dbSequences.length > 0
+    ? dbSequences.map(s => s.name)
+    : ['Sequence 1','Sequence 2','Sequence 3','Sequence 4','Sequence 5','Sequence 6']
+  ).filter(v => grouped[v]);
   if (!seqOrder.length) return <p className="text-center py-8 text-muted-foreground text-sm">{t('noMarksYet')}</p>;
 
   return (
@@ -362,6 +359,25 @@ const VPMarksPage = ({ selectedClass }) => {
 
   const [selectedSeqs, setSelectedSeqs] = useState([]);
   const [generating,   setGenerating]   = useState(false);
+  const [dbSequences,  setDbSequences]  = useState([]);   // from sequences table
+
+  // Load sequences from DB for current year
+  useEffect(() => {
+    const schoolId = localStorage.getItem('schoolId');
+    if (!schoolId) return;
+    supabase.from('academic_years').select('id')
+      .eq('school_id', parseInt(schoolId)).eq('is_current', true).maybeSingle()
+      .then(({ data: year }) => {
+        if (!year) return;
+        supabase.from('sequences').select('*, terms(name)')
+          .eq('school_id', parseInt(schoolId))
+          .eq('academic_year_id', year.id)
+          .order('sequence_index')
+          .then(({ data: seqs }) => {
+            setDbSequences(seqs || []);
+          });
+      });
+  }, []);
   const [reportCards,  setReportCards]  = useState([]);
   const [allSubjects,  setAllSubjects]  = useState([]);
   const [className,    setClassName]    = useState('');
