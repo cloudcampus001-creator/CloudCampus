@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -24,9 +23,9 @@ import VPChatPage            from '@/pages/vice_principal/VPChatPage';
 import AttributeSubjectsPage from '@/pages/vice_principal/AttributeSubjectsPage';
 import VPNotifyPage          from '@/pages/vice_principal/VPNotifyPage';
 import VPNotificationsPage   from '@/pages/vice_principal/VPNotificationsPage';
-import VPYearClosedPage        from '@/pages/vice_principal/VPYearClosedPage';
-import VPPromotionPage        from '@/pages/vice_principal/VPPromotionPage';
-import { useYearStatus }        from '@/hooks/useYearStatus';
+import VPYearClosedPage      from '@/pages/vice_principal/VPYearClosedPage';
+import VPPromotionPage       from '@/pages/vice_principal/VPPromotionPage';
+import { useYearStatus }     from '@/hooks/useYearStatus';
 
 const getInitials = (name = '') =>
   name.split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'VP';
@@ -67,7 +66,6 @@ const VicePrincipalDashboard = () => {
   const userId   = localStorage.getItem('userId');
   const schoolId = localStorage.getItem('schoolId');
 
-  /* ── classes ──────────────────────────────────── */
   useEffect(() => {
     if (!userId) return;
     supabase.from('classes').select('id, name').eq('vp_id', userId).then(({ data }) => {
@@ -87,7 +85,6 @@ const VicePrincipalDashboard = () => {
     localStorage.setItem('vpSelectedClass', val);
   };
 
-  /* ── unread badge ─────────────────────────────── */
   const syncUnread = useCallback(async () => {
     if (!schoolId) return;
     const key    = `notif_read_at_vp_${schoolId}_${userId}`;
@@ -129,13 +126,13 @@ const VicePrincipalDashboard = () => {
 
   const isChatPage = location.pathname.includes('/chat');
 
-  /* ── 5 nav tabs ─────────────────────────────────── */
   const navItems = [
-    { icon: Home,          label: t('overview'),          path: '/dashboard/vice-principal'                   },
-    { icon: BookOpen,      label: t('logbookReview'),     path: '/dashboard/vice-principal/logbooks'          },
-    { icon: BookMarked,    label: t('attributeSubjects'), path: '/dashboard/vice-principal/attribute-subjects'},
-    { icon: GraduationCap, label: t('marksheetReview'),  path: '/dashboard/vice-principal/marks'             },
-    { icon: MessageSquare, label: t('chat'),              path: '/dashboard/vice-principal/chat'              },
+    { icon: Home,          label: t('overview'),          path: '/dashboard/vice-principal',                    shortLabel: 'Home'    },
+    { icon: BookOpen,      label: t('logbookReview'),     path: '/dashboard/vice-principal/logbooks',           shortLabel: 'Logbook' },
+    { icon: BookMarked,    label: t('attributeSubjects'), path: '/dashboard/vice-principal/attribute-subjects', shortLabel: 'Subjects'},
+    { icon: GraduationCap, label: t('marksheetReview'),   path: '/dashboard/vice-principal/marks',              shortLabel: 'Marks'   },
+    { icon: Trophy,        label: 'Promotions',           path: '/dashboard/vice-principal/promotions',         shortLabel: 'Promote' },
+    { icon: MessageSquare, label: t('chat'),              path: '/dashboard/vice-principal/chat',               shortLabel: 'Chat'    },
   ];
 
   const ClassPicker = ({ compact = false }) => managedClasses.length > 0 ? (
@@ -155,7 +152,7 @@ const VicePrincipalDashboard = () => {
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row font-sans selection:bg-purple-500 selection:text-white">
 
-      {/* ── Desktop Sidebar ──────────────────────────── */}
+      {/* ── Desktop Sidebar ── */}
       <motion.aside
         initial={false}
         animate={{ width: isSidebarOpen ? 272 : 72 }}
@@ -179,7 +176,6 @@ const VicePrincipalDashboard = () => {
           </button>
         </div>
 
-        {/* Class picker */}
         {isSidebarOpen && (
           <div className="px-4 pb-3 shrink-0">
             <p className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-[0.15em] mb-2 px-1">{t('dashboardContext')}</p>
@@ -187,7 +183,6 @@ const VicePrincipalDashboard = () => {
           </div>
         )}
 
-        {/* Nav links */}
         <div className="px-3 py-1 flex-1 overflow-y-auto overflow-x-visible">
           {isSidebarOpen && (
             <p className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-[0.15em] mb-3 px-2">{t('menu')}</p>
@@ -222,7 +217,6 @@ const VicePrincipalDashboard = () => {
           </nav>
         </div>
 
-        {/* Sidebar footer */}
         <div className="p-4 border-t border-white/5 space-y-3 shrink-0">
           <div className={cn('flex items-center gap-2', !isSidebarOpen && 'flex-col')}>
             <ThemeToggle /><LanguageSwitcher />
@@ -253,7 +247,7 @@ const VicePrincipalDashboard = () => {
         </div>
       </motion.aside>
 
-      {/* ── Mobile Header ───────────────────────────── */}
+      {/* ── Mobile Header ── */}
       <div className="md:hidden flex items-center justify-between px-4 h-14 border-b border-white/10 bg-card/80 backdrop-blur-xl sticky top-0 z-50 gap-2">
         <LogoDropdown>
           <div className={`flex items-center gap-1.5 font-bold text-sm bg-clip-text text-transparent bg-gradient-to-r ${ACCENT.from} ${ACCENT.to}`}>
@@ -273,7 +267,7 @@ const VicePrincipalDashboard = () => {
         </div>
       </div>
 
-      {/* ── Main ────────────────────────────────────── */}
+      {/* ── Main content ── */}
       <main className="flex-1 p-4 md:p-8 pb-28 md:pb-8 overflow-y-auto h-[calc(100vh-56px)] md:h-screen scroll-smooth">
         {!yearLoading && yearIsClosed ? (
           <VPYearClosedPage closedYear={yearStatus.year} />
@@ -284,6 +278,7 @@ const VicePrincipalDashboard = () => {
               <Route path="/logbooks"           element={<VPLogbookPage     selectedClass={selectedClassId} />} />
               <Route path="/attribute-subjects" element={<AttributeSubjectsPage selectedClass={selectedClassId} />} />
               <Route path="/marks"              element={<VPMarksPage       selectedClass={selectedClassId} />} />
+              <Route path="/promotions"         element={<VPPromotionPage />} />
               <Route path="/chat"               element={<VPChatPage        selectedClass={selectedClassId} />} />
               <Route path="/notify"             element={<VPNotifyPage      selectedClass={selectedClassId} />} />
               <Route path="/notifications"      element={<VPNotificationsPage />} />
@@ -292,7 +287,7 @@ const VicePrincipalDashboard = () => {
         )}
       </main>
 
-      {/* ── Mobile Nav ──────────────────────────────── */}
+      {/* ── Mobile bottom nav ── */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 px-3 pb-3">
         <div className="bg-card/80 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.35)]">
           <div className="flex items-stretch px-1 py-1">
@@ -309,7 +304,7 @@ const VicePrincipalDashboard = () => {
                     )} />
                     <span className={cn('text-[9px] font-semibold leading-none truncate w-full text-center',
                       active ? ACCENT.text : 'text-muted-foreground'
-                    )}>{item.label.split(' ')[0]}</span>
+                    )}>{item.shortLabel}</span>
                   </div>
                 </Link>
               );
