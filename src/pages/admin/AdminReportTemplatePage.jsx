@@ -182,7 +182,7 @@ const AdminReportTemplatePage = () => {
       });
   }, [schoolId]);
 
-  const set = (key: string, val: any) => {
+  const set = (key, val) => {
     setSaved(false);
     setFields(p => ({ ...p, [key]: val }));
   };
