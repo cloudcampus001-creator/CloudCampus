@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, FileText, Shield, BookOpen, MessageSquare, LogOut, Menu, Cloud, GraduationCap } from 'lucide-react';
+import { Home, FileText, Shield, BookOpen, MessageSquare, LogOut, Menu, Cloud } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
@@ -21,8 +21,8 @@ import LibraryPage             from '@/pages/parent/LibraryPage';
 import ChatPage                from '@/pages/parent/ChatPage';
 import ParentNotificationsPage from '@/pages/parent/ParentNotificationsPage';
 import ParentYearEndPage       from '@/pages/parent/ParentYearEndPage';
-import { useYearStatus }        from '@/hooks/useYearStatus';
 import ParentReportCardPage     from '@/pages/parent/ParentReportCardPage';
+import { useYearStatus }        from '@/hooks/useYearStatus';
 
 const getInitials = (name = '') =>
   name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'P';
@@ -122,7 +122,6 @@ const ParentDashboard = () => {
     { icon: FileText,      label: t('documents'),  path: '/dashboard/parent/docs',       shortLabel: t('documents')  },
     { icon: Shield,        label: t('discipline'), path: '/dashboard/parent/discipline', shortLabel: t('discipline') },
     { icon: BookOpen,      label: t('library'),    path: '/dashboard/parent/library',    shortLabel: t('library')    },
-    { icon: GraduationCap, label: 'Bulletin',       path: '/dashboard/parent/report-card',shortLabel: 'Bulletin'      },
     { icon: MessageSquare, label: t('chat'),       path: '/dashboard/parent/chat',       shortLabel: t('chat')       },
   ];
 

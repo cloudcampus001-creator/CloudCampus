@@ -1,9 +1,10 @@
+
 import React, { useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
   FileText, BookOpen, AlertTriangle, CheckCircle,
   TrendingUp, Award, Calendar, Bell, ChevronRight,
-  FileStack, Shield, MessageSquare
+  FileStack, Shield, MessageSquare, GraduationCap
 } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { Helmet } from 'react-helmet';
@@ -67,6 +68,7 @@ const OverviewPage = ({ unreadCount = 0 }) => {
   const navigate      = useNavigate();
   const { t }         = useLanguage();
   const [loading, setLoading]             = useState(true);
+  const [bulletinCount, setBulletinCount]   = useState(0);
   const [stats, setStats]                 = useState({ assignments: 0, absences: 0, books: 0 });
   const [absenceHistory, setAbsenceHistory] = useState([]);
   const [subjectDocs, setSubjectDocs]     = useState([]);
@@ -124,6 +126,20 @@ const OverviewPage = ({ unreadCount = 0 }) => {
   const hour      = new Date().getHours();
   const greeting  = hour < 12 ? t('goodMorning') : hour < 17 ? t('goodAfternoon') : t('goodEvening');
   const dateLabel = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+
+  /* ── Fetch published bulletin count ───────────────── */
+  useEffect(() => {
+    const cid = localStorage.getItem('classId');
+    const sid = localStorage.getItem('schoolId');
+    if (!cid || !sid) return;
+    supabase.from('academic_years').select('id').eq('school_id', parseInt(sid)).eq('is_current', true).maybeSingle()
+      .then(({ data: year }) => {
+        if (!year) return;
+        supabase.from('report_card_publications').select('id', { count: 'exact', head: true })
+          .eq('class_id', parseInt(cid)).eq('academic_year_id', year.id)
+          .then(({ count }) => { if (count) setBulletinCount(count); });
+      });
+  }, []);
 
   return (
     <>
@@ -323,6 +339,26 @@ const OverviewPage = ({ unreadCount = 0 }) => {
                 <p className="text-xs text-muted-foreground">{t('jumpToSection')}</p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {/* Bulletins button — prominent, only if at least one published */}
+                <button onClick={() => navigate('/dashboard/parent/report-card')}
+                  className="flex items-center gap-3 p-4 rounded-2xl bg-blue-500/8 border border-blue-500/20 hover:bg-blue-500/15 hover:border-blue-500/35 transition-all active:scale-[0.98] text-left group sm:col-span-2">
+                  <div className="p-2.5 rounded-xl bg-blue-500/20 group-hover:bg-blue-500/30 transition-colors shrink-0 relative">
+                    <GraduationCap className="h-4 w-4 text-blue-400" />
+                    {bulletinCount > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-blue-500 text-white text-[9px] font-black flex items-center justify-center border border-background shadow">
+                        {bulletinCount}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold leading-tight text-blue-300">Mes Bulletins de Notes</p>
+                    <p className="text-[11px] text-muted-foreground truncate">
+                      {bulletinCount > 0 ? `${bulletinCount} bulletin${bulletinCount > 1 ? 's' : ''} disponible${bulletinCount > 1 ? 's' : ''}` : 'Consultez vos bulletins publiés'}
+                    </p>
+                  </div>
+                  <ChevronRight className="h-3.5 w-3.5 text-blue-400/60 group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all shrink-0" />
+                </button>
+
                 {[
                   { icon: FileStack,      label: t('documents'),  sub: t('accessDocuments'),    path: '/dashboard/parent/docs',       color: 'indigo' },
                   { icon: Shield,         label: t('discipline'), sub: t('submitJustification'), path: '/dashboard/parent/discipline', color: 'orange' },
