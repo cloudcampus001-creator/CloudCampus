@@ -75,7 +75,7 @@ const HeaderPreview = ({ fields }) => {
         {fields.logo_url && (
           <img src={fields.logo_url} alt="logo"
             style={{ height: 60, objectFit: 'contain', marginBottom: 6, display: 'block', marginLeft: 'auto', marginRight: 'auto' }}
-            onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            onError={e => { e.target.style.display = 'none'; }} />
         )}
         <div style={{ fontSize: 17, fontWeight: 900, color: accent, letterSpacing: 1, textTransform: 'uppercase' }}>
           {fields.school_name || 'School Name'}
@@ -114,12 +114,12 @@ const HeaderPreview = ({ fields }) => {
           {fields.stamp_url && (
             <img src={fields.stamp_url} alt="stamp"
               style={{ height: 40, objectFit: 'contain', display: 'block', margin: '4px auto 0' }}
-              onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+              onError={e => { e.target.style.display = 'none'; }} />
           )}
           {fields.signature_url && (
             <img src={fields.signature_url} alt="signature"
               style={{ height: 30, objectFit: 'contain', display: 'block', margin: '2px auto 0' }}
-              onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+              onError={e => { e.target.style.display = 'none'; }} />
           )}
         </div>
       </div>
@@ -327,7 +327,7 @@ const AdminReportTemplatePage = () => {
                 placeholder="https://…/logo.png" className="bg-white/5 border-white/10 focus:border-indigo-500/50" />
               {fields.logo_url && (
                 <img src={fields.logo_url} alt="logo preview" className="mt-2 h-12 object-contain rounded"
-                  onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  onError={e => { e.target.style.display = 'none'; }} />
               )}
             </Field>
             <Field label="Official Stamp URL" hint="School seal / cachet">
@@ -335,7 +335,7 @@ const AdminReportTemplatePage = () => {
                 placeholder="https://…/stamp.png" className="bg-white/5 border-white/10 focus:border-indigo-500/50" />
               {fields.stamp_url && (
                 <img src={fields.stamp_url} alt="stamp preview" className="mt-2 h-12 object-contain rounded"
-                  onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  onError={e => { e.target.style.display = 'none'; }} />
               )}
             </Field>
             <Field label="Signature Image URL" hint="Censeur/Principal handwritten signature">
@@ -343,7 +343,7 @@ const AdminReportTemplatePage = () => {
                 placeholder="https://…/signature.png" className="bg-white/5 border-white/10 focus:border-indigo-500/50" />
               {fields.signature_url && (
                 <img src={fields.signature_url} alt="sig preview" className="mt-2 h-10 object-contain rounded"
-                  onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  onError={e => { e.target.style.display = 'none'; }} />
               )}
             </Field>
           </div>
@@ -396,3 +396,5 @@ const AdminReportTemplatePage = () => {
 };
 
 export default AdminReportTemplatePage;
+</file>
+
