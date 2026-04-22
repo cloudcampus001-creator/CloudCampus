@@ -1,4 +1,3 @@
-
 /**
  * AdminAcademicYearPage.jsx
  * Polished Academic Year Engine — glassmorphism modals, smooth UX
@@ -335,19 +334,19 @@ const YearsTab = ({ schoolId, years, loading, onRefresh }) => {
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all">
                       <Lock className="h-3 w-3" /> Close Year
                     </button>
-                      {/* Suspend / Resume button */}
-                      {year.status === 'open' && (
-                        <button onClick={() => setConfirm({ type: 'suspend', year })}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/10 border border-amber-500/25 text-amber-400 hover:bg-amber-500/20 transition-all">
-                          <PauseCircle className="h-3.5 w-3.5" /> Suspend
-                        </button>
-                      )}
-                      {year.status === 'suspended' && (
-                        <button onClick={() => setConfirm({ type: 'resume', year })}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/20 transition-all">
-                          <PlayCircle className="h-3.5 w-3.5" /> Resume
-                        </button>
-                      )}
+                  )}
+                  {/* Suspend / Resume button */}
+                  {year.is_current && year.status === 'open' && (
+                    <button onClick={() => setConfirm({ type: 'suspend', year })}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/10 border border-amber-500/25 text-amber-400 hover:bg-amber-500/20 transition-all">
+                      <PauseCircle className="h-3.5 w-3.5" /> Suspend
+                    </button>
+                  )}
+                  {year.is_current && year.status === 'suspended' && (
+                    <button onClick={() => setConfirm({ type: 'resume', year })}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/20 transition-all">
+                      <PlayCircle className="h-3.5 w-3.5" /> Resume
+                    </button>
                   )}
                 </div>
               </div>
