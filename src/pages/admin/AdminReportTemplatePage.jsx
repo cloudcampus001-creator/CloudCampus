@@ -1,22 +1,32 @@
 /**
  * AdminReportTemplatePage.jsx
- * Lets the administrator design the school's official report card header.
- * Fields are stored as columns on the `schools` table.
+ * Full report card template designer.
+ * Fields stored on the `schools` table.
  *
- * SQL migration (run once in Supabase):
+ * SQL migration (run once in Supabase if not already done):
  *   ALTER TABLE schools
- *     ADD COLUMN IF NOT EXISTS report_school_name   TEXT,
- *     ADD COLUMN IF NOT EXISTS report_motto         TEXT,
- *     ADD COLUMN IF NOT EXISTS report_address       TEXT,
- *     ADD COLUMN IF NOT EXISTS report_principal     TEXT,
- *     ADD COLUMN IF NOT EXISTS report_logo_url      TEXT,
- *     ADD COLUMN IF NOT EXISTS report_accent_color  TEXT DEFAULT '#7c3aed';
+ *     ADD COLUMN IF NOT EXISTS report_school_name    TEXT,
+ *     ADD COLUMN IF NOT EXISTS report_motto          TEXT,
+ *     ADD COLUMN IF NOT EXISTS report_address        TEXT,
+ *     ADD COLUMN IF NOT EXISTS report_city           TEXT,
+ *     ADD COLUMN IF NOT EXISTS report_phone          TEXT,
+ *     ADD COLUMN IF NOT EXISTS report_email          TEXT,
+ *     ADD COLUMN IF NOT EXISTS report_principal      TEXT,
+ *     ADD COLUMN IF NOT EXISTS report_vp_name        TEXT,
+ *     ADD COLUMN IF NOT EXISTS report_logo_url       TEXT,
+ *     ADD COLUMN IF NOT EXISTS report_stamp_url      TEXT,
+ *     ADD COLUMN IF NOT EXISTS report_signature_url  TEXT,
+ *     ADD COLUMN IF NOT EXISTS report_accent_color   TEXT DEFAULT '#6366f1',
+ *     ADD COLUMN IF NOT EXISTS report_show_stamp     BOOLEAN DEFAULT true,
+ *     ADD COLUMN IF NOT EXISTS report_header_note    TEXT,
+ *     ADD COLUMN IF NOT EXISTS report_ministry_label TEXT;
  */
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   GraduationCap, Save, Loader2, CheckCircle2,
-  Palette, FileText, Eye, EyeOff,
+  Palette, Image, Upload, Phone, Mail, MapPin,
+  User, PenLine, Building, Eye,
 } from 'lucide-react';
 import { Helmet } from 'react-helmet';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -24,265 +34,364 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
-import { useLanguage } from '@/contexts/LanguageContext';
 import PageTransition from '@/components/PageTransition';
 import { cn } from '@/lib/utils';
 
-const fadeUp = {
-  hidden:  { opacity: 0, y: 14 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.3 } },
-};
+const fadeUp = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transition: { duration: 0.3 } } };
 
-/* ── Live preview of the report card header ───────────── */
+/* ── Section wrapper ───────────────────────────────── */
+const Section = ({ icon: Icon, title, children }) => (
+  <div className="glass rounded-2xl border border-white/10 overflow-hidden">
+    <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/8 bg-white/3">
+      <div className="h-8 w-8 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center shrink-0">
+        <Icon className="h-4 w-4 text-indigo-400" />
+      </div>
+      <p className="font-bold text-sm">{title}</p>
+    </div>
+    <div className="p-5 space-y-4">{children}</div>
+  </div>
+);
+
+const Field = ({ label, hint, children }) => (
+  <div className="space-y-1.5">
+    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground/70">{label}</Label>
+    {children}
+    {hint && <p className="text-[11px] text-muted-foreground/60">{hint}</p>}
+  </div>
+);
+
+/* ── Live preview ────────────────────────────────── */
 const HeaderPreview = ({ fields }) => {
-  const accent = fields.accent_color || '#7c3aed';
+  const accent = fields.accent_color || '#6366f1';
   return (
-    <div style={{ fontFamily: "'Segoe UI', Arial, sans-serif", fontSize: 12, color: '#1f2937', background: '#fff', borderRadius: 8, padding: 20, border: '1px solid #e5e7eb' }}>
+    <div style={{ fontFamily: "'Segoe UI', Arial, sans-serif", fontSize: 12, color: '#1f2937', background: '#fff', borderRadius: 8, padding: 20, border: '1px solid #e5e7eb', maxWidth: 640 }}>
+      {/* Ministry / Region header */}
+      {fields.ministry_label && (
+        <div style={{ textAlign: 'center', fontSize: 10, color: '#6b7280', marginBottom: 6, letterSpacing: 1, textTransform: 'uppercase' }}>
+          {fields.ministry_label}
+        </div>
+      )}
       <div style={{ textAlign: 'center', borderBottom: `3px solid ${accent}`, paddingBottom: 12, marginBottom: 12 }}>
         {fields.logo_url && (
-          <img src={fields.logo_url} alt="logo" style={{ height: 56, objectFit: 'contain', marginBottom: 6, display: 'block', marginLeft: 'auto', marginRight: 'auto' }}
-            onError={e => { e.target.style.display = 'none'; }} />
+          <img src={fields.logo_url} alt="logo"
+            style={{ height: 60, objectFit: 'contain', marginBottom: 6, display: 'block', marginLeft: 'auto', marginRight: 'auto' }}
+            onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         )}
-        <div style={{ fontSize: 17, fontWeight: 800, color: accent, letterSpacing: 1, textTransform: 'uppercase' }}>
+        <div style={{ fontSize: 17, fontWeight: 900, color: accent, letterSpacing: 1, textTransform: 'uppercase' }}>
           {fields.school_name || 'School Name'}
         </div>
         {fields.motto && (
-          <div style={{ fontSize: 11, fontStyle: 'italic', color: '#6b7280', marginTop: 3 }}>
-            "{fields.motto}"
-          </div>
+          <div style={{ fontSize: 11, fontStyle: 'italic', color: '#6b7280', marginTop: 3 }}>"{fields.motto}"</div>
         )}
-        {fields.address && (
-          <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 4 }}>{fields.address}</div>
+        {fields.header_note && (
+          <div style={{ fontSize: 10, color: '#6b7280', marginTop: 2 }}>{fields.header_note}</div>
         )}
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginTop: 6, letterSpacing: 3, textTransform: 'uppercase' }}>
-          ACADEMIC REPORT CARD
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 12, marginTop: 5, fontSize: 10, color: '#9ca3af' }}>
+          {fields.city    && <span>📍 {fields.city}</span>}
+          {fields.phone   && <span>📞 {fields.phone}</span>}
+          {fields.email   && <span>✉ {fields.email}</span>}
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 6, marginTop: 10, fontSize: 11 }}>
-          <span><b>Student:</b> _______________</span>
-          <span><b>Class:</b> _______________</span>
-          <span><b>Period:</b> _______________</span>
-          <span><b>Date:</b> {new Date().toLocaleDateString()}</span>
+        <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginTop: 8, letterSpacing: 3, textTransform: 'uppercase', background: accent, color: '#fff', padding: '4px 0', borderRadius: 3 }}>
+          BULLETIN DE NOTES
         </div>
       </div>
-      <div style={{ height: 8, background: '#f3f4f6', borderRadius: 4, marginBottom: 10 }} />
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#9ca3af', marginTop: 16 }}>
-        <span>Class Teacher: ____________________</span>
-        {fields.principal && <span>Principal: {fields.principal}</span>}
-        <span>Parent: ____________________</span>
+
+      {/* Mock table */}
+      <div style={{ height: 60, background: '#f9fafb', borderRadius: 4, border: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', fontSize: 11 }}>
+        [ Tableau des notes ]
+      </div>
+
+      {/* Signature block */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16, gap: 10, fontSize: 10 }}>
+        <div style={{ flex: 1, borderTop: '1px solid #d1d5db', paddingTop: 6, textAlign: 'center' }}>
+          <div style={{ color: '#6b7280' }}>Signature du Parent / Tuteur</div>
+        </div>
+        <div style={{ flex: 1, borderTop: '1px solid #d1d5db', paddingTop: 6, textAlign: 'center' }}>
+          <div style={{ color: '#6b7280' }}>Prof. Principal</div>
+        </div>
+        <div style={{ flex: 1, borderTop: '1px solid #d1d5db', paddingTop: 6, textAlign: 'center' }}>
+          <div style={{ fontWeight: 700, color: '#374151' }}>{fields.vp_name || 'Censeur / Proviseur'}</div>
+          {fields.stamp_url && (
+            <img src={fields.stamp_url} alt="stamp"
+              style={{ height: 40, objectFit: 'contain', display: 'block', margin: '4px auto 0' }}
+              onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+          )}
+          {fields.signature_url && (
+            <img src={fields.signature_url} alt="signature"
+              style={{ height: 30, objectFit: 'contain', display: 'block', margin: '2px auto 0' }}
+              onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+          )}
+        </div>
       </div>
     </div>
   );
 };
 
-/* ════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════ */
 const AdminReportTemplatePage = () => {
   const { toast } = useToast();
-  const { t }     = useLanguage();
+  const schoolId  = localStorage.getItem('schoolId');
 
-  const schoolId = localStorage.getItem('schoolId');
-
-  const [loading,  setLoading]  = useState(true);
-  const [saving,   setSaving]   = useState(false);
-  const [saved,    setSaved]    = useState(false);
-  const [preview,  setPreview]  = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [saving,  setSaving]  = useState(false);
+  const [saved,   setSaved]   = useState(false);
+  const [preview, setPreview] = useState(false);
 
   const [fields, setFields] = useState({
-    school_name:   '',
-    motto:         '',
-    address:       '',
-    principal:     '',
-    logo_url:      '',
-    accent_color:  '#7c3aed',
+    school_name:      '',
+    motto:            '',
+    address:          '',
+    city:             '',
+    phone:            '',
+    email:            '',
+    principal:        '',
+    vp_name:          '',
+    logo_url:         '',
+    stamp_url:        '',
+    signature_url:    '',
+    accent_color:     '#6366f1',
+    ministry_label:   '',
+    header_note:      '',
+    show_stamp:       true,
   });
 
-  /* ── fetch existing template ────────────────────────── */
   useEffect(() => {
-    if (!schoolId) { setLoading(false); return; }
-    (async () => {
-      const { data } = await supabase
-        .from('schools')
-        .select('name, report_school_name, report_motto, report_address, report_principal, report_logo_url, report_accent_color')
-        .eq('id', parseInt(schoolId))
-        .maybeSingle();
-
-      if (data) {
-        setFields({
-          school_name:  data.report_school_name  || data.name || '',
-          motto:        data.report_motto        || '',
-          address:      data.report_address      || '',
-          principal:    data.report_principal    || '',
-          logo_url:     data.report_logo_url     || '',
-          accent_color: data.report_accent_color || '#7c3aed',
-        });
-      }
-      setLoading(false);
-    })();
+    if (!schoolId) return;
+    supabase.from('schools').select('*').eq('id', parseInt(schoolId)).maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          setFields({
+            school_name:    data.report_school_name    || data.name || '',
+            motto:          data.report_motto          || '',
+            address:        data.report_address        || data.address || '',
+            city:           data.report_city           || '',
+            phone:          data.report_phone          || data.phone || '',
+            email:          data.report_email          || data.email || '',
+            principal:      data.report_principal      || '',
+            vp_name:        data.report_vp_name        || '',
+            logo_url:       data.report_logo_url       || data.logo_url || '',
+            stamp_url:      data.report_stamp_url      || '',
+            signature_url:  data.report_signature_url  || '',
+            accent_color:   data.report_accent_color   || '#6366f1',
+            ministry_label: data.report_ministry_label || '',
+            header_note:    data.report_header_note    || '',
+            show_stamp:     data.report_show_stamp !== false,
+          });
+        }
+        setLoading(false);
+      });
   }, [schoolId]);
 
-  const set = (key, val) => setFields(p => ({ ...p, [key]: val }));
-
-  /* ── save ───────────────────────────────────────────── */
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      const { error } = await supabase.from('schools').update({
-        report_school_name:  fields.school_name,
-        report_motto:        fields.motto,
-        report_address:      fields.address,
-        report_principal:    fields.principal,
-        report_logo_url:     fields.logo_url,
-        report_accent_color: fields.accent_color,
-      }).eq('id', parseInt(schoolId));
-
-      if (error) throw error;
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
-      toast({ title: `✓ ${t('templateSaved')}`, description: t('templateSavedDesc'), className: 'bg-green-500/10 border-green-500/50 text-green-400' });
-    } catch (err) {
-      toast({ variant: 'destructive', title: t('error'), description: err.message });
-    } finally {
-      setSaving(false);
-    }
+  const set = (key: string, val: any) => {
+    setSaved(false);
+    setFields(p => ({ ...p, [key]: val }));
   };
 
-  /* ── render ─────────────────────────────────────────── */
+  const handleSave = async () => {
+    if (!schoolId) return;
+    setSaving(true);
+    const { error } = await supabase.from('schools').update({
+      report_school_name:   fields.school_name    || null,
+      report_motto:         fields.motto          || null,
+      report_address:       fields.address        || null,
+      report_city:          fields.city           || null,
+      report_phone:         fields.phone          || null,
+      report_email:         fields.email          || null,
+      report_principal:     fields.principal      || null,
+      report_vp_name:       fields.vp_name        || null,
+      report_logo_url:      fields.logo_url       || null,
+      report_stamp_url:     fields.stamp_url      || null,
+      report_signature_url: fields.signature_url  || null,
+      report_accent_color:  fields.accent_color   || '#6366f1',
+      report_ministry_label: fields.ministry_label || null,
+      report_header_note:   fields.header_note    || null,
+      report_show_stamp:    fields.show_stamp,
+    }).eq('id', parseInt(schoolId));
+
+    setSaving(false);
+    if (error) {
+      toast({ variant: 'destructive', title: 'Error', description: error.message });
+      return;
+    }
+    setSaved(true);
+    toast({ title: '✅ Template saved', description: 'Your report card template has been updated.' });
+  };
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-24">
+      <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
+    </div>
+  );
+
   return (
-    <>
-      <Helmet><title>{t('reportTemplate')} · Admin · CloudCampus</title></Helmet>
-      <PageTransition>
-        <div className="max-w-4xl mx-auto space-y-7 pb-6">
+    <PageTransition>
+      <Helmet><title>Report Card Template · CloudCampus</title></Helmet>
+      <div className="max-w-3xl mx-auto space-y-6">
 
-          {/* Header */}
-          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-            <h1 className="text-3xl font-black tracking-tight">{t('reportTemplate')}</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              {t('reportTemplateDesc')}
-            </p>
+        {/* Header */}
+        <motion.div variants={fadeUp} initial="hidden" animate="visible" className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center">
+              <GraduationCap className="h-5 w-5 text-indigo-400" />
+            </div>
+            <div>
+              <h1 className="font-black text-2xl">Report Card Template</h1>
+              <p className="text-sm text-muted-foreground">Customize the header, logo, and signatures on all bulletins</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={() => setPreview(p => !p)}
+              className={cn('flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-all',
+                preview ? 'bg-white/10 border-white/20 text-foreground' : 'bg-white/5 border-white/10 text-muted-foreground hover:bg-white/10')}>
+              <Eye className="h-3.5 w-3.5" /> {preview ? 'Hide' : 'Preview'}
+            </button>
+            <button onClick={handleSave} disabled={saving}
+              className="flex items-center gap-2 px-5 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-bold transition-all disabled:opacity-60 shadow-lg shadow-indigo-500/30">
+              {saving  ? <Loader2 className="h-4 w-4 animate-spin" />
+               : saved ? <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+               :         <Save className="h-4 w-4" />}
+              {saved ? 'Saved' : 'Save Template'}
+            </button>
+          </div>
+        </motion.div>
+
+        {/* Live Preview */}
+        {preview && (
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="space-y-2">
+            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground/70 px-1">Live Preview</p>
+            <div className="overflow-x-auto rounded-2xl border border-white/10 p-4 bg-white/3">
+              <HeaderPreview fields={fields} />
+            </div>
           </motion.div>
+        )}
 
-          {loading ? (
-            <div className="space-y-4">
-              {[0, 1, 2].map(i => <div key={i} className="h-16 rounded-2xl bg-white/5 animate-pulse" />)}
+        {/* ── Section 1: Identity ── */}
+        <Section icon={Building} title="School Identity">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Official School Name" hint="Displayed on every report card">
+              <Input value={fields.school_name} onChange={e => set('school_name', e.target.value)}
+                placeholder="e.g. GBHS Obili" className="bg-white/5 border-white/10 focus:border-indigo-500/50" />
+            </Field>
+            <Field label="Ministry / Region Header" hint="e.g. Republic of Cameroon — Ministry of Secondary Education">
+              <Input value={fields.ministry_label} onChange={e => set('ministry_label', e.target.value)}
+                placeholder="République du Cameroun…" className="bg-white/5 border-white/10 focus:border-indigo-500/50" />
+            </Field>
+          </div>
+          <Field label="School Motto" hint="Displayed in italics under the name">
+            <Input value={fields.motto} onChange={e => set('motto', e.target.value)}
+              placeholder="e.g. Excellence & Integrity" className="bg-white/5 border-white/10 focus:border-indigo-500/50" />
+          </Field>
+          <Field label="Additional Header Note" hint="Small text under motto, e.g. BP 123, Yaoundé">
+            <Input value={fields.header_note} onChange={e => set('header_note', e.target.value)}
+              placeholder="Optional note" className="bg-white/5 border-white/10 focus:border-indigo-500/50" />
+          </Field>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Field label="City">
+              <Input value={fields.city} onChange={e => set('city', e.target.value)}
+                placeholder="Yaoundé" className="bg-white/5 border-white/10 focus:border-indigo-500/50" />
+            </Field>
+            <Field label="Phone">
+              <Input value={fields.phone} onChange={e => set('phone', e.target.value)}
+                placeholder="+237 6…" className="bg-white/5 border-white/10 focus:border-indigo-500/50" />
+            </Field>
+            <Field label="Email">
+              <Input value={fields.email} onChange={e => set('email', e.target.value)} type="email"
+                placeholder="school@example.com" className="bg-white/5 border-white/10 focus:border-indigo-500/50" />
+            </Field>
+          </div>
+          <Field label="Full Address">
+            <Input value={fields.address} onChange={e => set('address', e.target.value)}
+              placeholder="Street, District…" className="bg-white/5 border-white/10 focus:border-indigo-500/50" />
+          </Field>
+        </Section>
+
+        {/* ── Section 2: Staff ── */}
+        <Section icon={User} title="Staff Signatures">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Principal / Proviseur Name" hint="Shown in the principal signature block">
+              <Input value={fields.principal} onChange={e => set('principal', e.target.value)}
+                placeholder="M. / Mme …" className="bg-white/5 border-white/10 focus:border-indigo-500/50" />
+            </Field>
+            <Field label="Censeur / VP Name" hint="Shown in the VP/Censeur signature block">
+              <Input value={fields.vp_name} onChange={e => set('vp_name', e.target.value)}
+                placeholder="M. / Mme …" className="bg-white/5 border-white/10 focus:border-indigo-500/50" />
+            </Field>
+          </div>
+        </Section>
+
+        {/* ── Section 3: Visuals ── */}
+        <Section icon={Image} title="Logo, Stamp & Signature">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Field label="School Logo URL" hint="Displayed at top center">
+              <Input value={fields.logo_url} onChange={e => set('logo_url', e.target.value)}
+                placeholder="https://…/logo.png" className="bg-white/5 border-white/10 focus:border-indigo-500/50" />
+              {fields.logo_url && (
+                <img src={fields.logo_url} alt="logo preview" className="mt-2 h-12 object-contain rounded"
+                  onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+              )}
+            </Field>
+            <Field label="Official Stamp URL" hint="School seal / cachet">
+              <Input value={fields.stamp_url} onChange={e => set('stamp_url', e.target.value)}
+                placeholder="https://…/stamp.png" className="bg-white/5 border-white/10 focus:border-indigo-500/50" />
+              {fields.stamp_url && (
+                <img src={fields.stamp_url} alt="stamp preview" className="mt-2 h-12 object-contain rounded"
+                  onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+              )}
+            </Field>
+            <Field label="Signature Image URL" hint="Censeur/Principal handwritten signature">
+              <Input value={fields.signature_url} onChange={e => set('signature_url', e.target.value)}
+                placeholder="https://…/signature.png" className="bg-white/5 border-white/10 focus:border-indigo-500/50" />
+              {fields.signature_url && (
+                <img src={fields.signature_url} alt="sig preview" className="mt-2 h-10 object-contain rounded"
+                  onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+              )}
+            </Field>
+          </div>
+          <div className="flex items-center gap-3">
+            <input type="checkbox" id="show_stamp" checked={fields.show_stamp} onChange={e => set('show_stamp', e.target.checked)}
+              className="h-4 w-4 rounded accent-indigo-500" />
+            <label htmlFor="show_stamp" className="text-sm font-medium cursor-pointer">
+              Show stamp & signature on printed report cards
+            </label>
+          </div>
+          <div className="p-3 rounded-xl bg-indigo-500/8 border border-indigo-500/15 text-xs text-indigo-300">
+            💡 For logo, stamp, and signature images: upload them to Supabase Storage → get the public URL → paste it above.
+          </div>
+        </Section>
+
+        {/* ── Section 4: Color ── */}
+        <Section icon={Palette} title="Accent Color">
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              <input type="color" value={fields.accent_color} onChange={e => set('accent_color', e.target.value)}
+                className="h-12 w-20 rounded-xl border border-white/10 cursor-pointer bg-transparent p-1" />
             </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-              {/* ── Form ─────────────────────────────────── */}
-              <motion.div variants={fadeUp} initial="hidden" animate="visible" className="space-y-5">
-
-                <div className="glass rounded-2xl p-6 space-y-5">
-                  <div className="flex items-center gap-2.5 mb-1">
-                    <div className="p-2 rounded-xl bg-indigo-500/15">
-                      <FileText className="h-4 w-4 text-indigo-400" />
-                    </div>
-                    <h2 className="font-bold">{t('schoolInfoSection')}</h2>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('schoolOfficialName')}</Label>
-                    <Input value={fields.school_name} onChange={e => set('school_name', e.target.value)}
-                      placeholder="e.g. Collège Saint-Paul de Yaoundé"
-                      className="h-11 bg-white/5 border-white/10 rounded-xl focus:border-indigo-500/50" />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('schoolMotto')}</Label>
-                    <Input value={fields.motto} onChange={e => set('motto', e.target.value)}
-                      placeholder="e.g. Excellence through discipline"
-                      className="h-11 bg-white/5 border-white/10 rounded-xl focus:border-indigo-500/50" />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('schoolAddress')}</Label>
-                    <Input value={fields.address} onChange={e => set('address', e.target.value)}
-                      placeholder="e.g. B.P. 1234, Yaoundé, Cameroun"
-                      className="h-11 bg-white/5 border-white/10 rounded-xl focus:border-indigo-500/50" />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('principalName')}</Label>
-                    <Input value={fields.principal} onChange={e => set('principal', e.target.value)}
-                      placeholder="e.g. Rev. Fr. Jean-Paul Mbarga"
-                      className="h-11 bg-white/5 border-white/10 rounded-xl focus:border-indigo-500/50" />
-                  </div>
-                </div>
-
-                <div className="glass rounded-2xl p-6 space-y-5">
-                  <div className="flex items-center gap-2.5 mb-1">
-                    <div className="p-2 rounded-xl bg-purple-500/15">
-                      <Palette className="h-4 w-4 text-purple-400" />
-                    </div>
-                    <h2 className="font-bold">{t('brandingSection')}</h2>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('logoUrl')}</Label>
-                    <Input value={fields.logo_url} onChange={e => set('logo_url', e.target.value)}
-                      placeholder="https://yourschool.com/logo.png"
-                      className="h-11 bg-white/5 border-white/10 rounded-xl focus:border-indigo-500/50 font-mono text-xs" />
-                    <p className="text-[11px] text-muted-foreground">{t('logoUrlHint')}</p>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('accentColor')}</Label>
-                    <div className="flex items-center gap-3">
-                      <input type="color" value={fields.accent_color}
-                        onChange={e => set('accent_color', e.target.value)}
-                        className="h-11 w-16 rounded-xl cursor-pointer border border-white/10 bg-transparent p-1" />
-                      <Input value={fields.accent_color} onChange={e => set('accent_color', e.target.value)}
-                        placeholder="#7c3aed" maxLength={7}
-                        className="h-11 bg-white/5 border-white/10 rounded-xl focus:border-indigo-500/50 font-mono flex-1" />
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">{t('accentColorHint')}</p>
-                  </div>
-                </div>
-
-                {/* Migration note */}
-                <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-white/4 border border-white/8 text-xs text-muted-foreground">
-                  <span className="text-indigo-400 font-semibold">SQL (run once):</span>
-                  <code className="font-mono text-indigo-300 text-[10px] leading-relaxed">
-                    ALTER TABLE schools ADD COLUMN IF NOT EXISTS report_school_name TEXT, ADD COLUMN IF NOT EXISTS report_motto TEXT, ADD COLUMN IF NOT EXISTS report_address TEXT, ADD COLUMN IF NOT EXISTS report_principal TEXT, ADD COLUMN IF NOT EXISTS report_logo_url TEXT, ADD COLUMN IF NOT EXISTS report_accent_color TEXT DEFAULT '#7c3aed';
-                  </code>
-                </div>
-
-                {/* Save button */}
-                <button onClick={handleSave} disabled={saving}
-                  className={cn(
-                    'w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm text-white transition-all active:scale-[0.97] disabled:opacity-60',
-                    saved ? 'bg-gradient-to-r from-green-500 to-emerald-500' : ''
-                  )}
-                  style={!saved ? { background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', boxShadow: '0 6px 20px rgba(99,102,241,0.3)' } : {}}>
-                  {saving ? <><Loader2 className="h-4 w-4 animate-spin" /> {t('templateSaving')}</>
-                    : saved  ? <><CheckCircle2 className="h-4 w-4" /> {t('templateSavedBtn')}</>
-                    : <><Save className="h-4 w-4" /> {t('saveTemplate')}</>}
-                </button>
-              </motion.div>
-
-              {/* ── Live preview ─────────────────────────── */}
-              <motion.div variants={fadeUp} initial="hidden" animate="visible" className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="font-bold text-sm">{t('livePreview')}</h2>
-                  <button onClick={() => setPreview(p => !p)}
-                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
-                    {preview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                    {preview ? t('previewHide') : t('previewShow')}
-                  </button>
-                </div>
-                {preview && (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                    <HeaderPreview fields={fields} />
-                    <p className="text-[11px] text-muted-foreground mt-3 text-center">
-                      {t('previewFooter')}
-                    </p>
-                  </motion.div>
-                )}
-              </motion.div>
-
+            <div>
+              <p className="text-sm font-bold" style={{ color: fields.accent_color }}>{fields.accent_color}</p>
+              <p className="text-xs text-muted-foreground">Used for table headers, school name, and divider line</p>
             </div>
-          )}
-        </div>
-      </PageTransition>
-    </>
+            <div className="flex gap-2 flex-wrap">
+              {['#6366f1','#7c3aed','#0ea5e9','#10b981','#f59e0b','#ef4444','#1e40af'].map(c => (
+                <button key={c} onClick={() => set('accent_color', c)}
+                  className="h-7 w-7 rounded-lg border-2 transition-all"
+                  style={{ background: c, borderColor: fields.accent_color === c ? '#fff' : 'transparent' }} />
+              ))}
+            </div>
+          </div>
+        </Section>
+
+        {/* Save button at bottom */}
+        <motion.div variants={fadeUp} initial="hidden" animate="visible" className="flex justify-end pt-2">
+          <button onClick={handleSave} disabled={saving}
+            className="flex items-center gap-2 px-8 py-3 rounded-2xl bg-indigo-500 hover:bg-indigo-600 text-white font-bold transition-all disabled:opacity-60 shadow-lg shadow-indigo-500/30">
+            {saving  ? <Loader2 className="h-4 w-4 animate-spin" />
+             : saved ? <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+             :         <Save className="h-4 w-4" />}
+            {saved ? 'Template Saved ✓' : 'Save Template'}
+          </button>
+        </motion.div>
+      </div>
+    </PageTransition>
   );
 };
 

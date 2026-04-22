@@ -1,10 +1,12 @@
+
 import React, { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Bell, Calendar, User, Paperclip, ExternalLink,
-  Megaphone, BookOpen, ChevronDown
+  Megaphone, BookOpen, ChevronDown, BookMarked
 } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
+import { useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet';
 import { useLanguage } from '@/contexts/LanguageContext';
 import PageTransition from '@/components/PageTransition';
@@ -40,6 +42,9 @@ const dayLabel = (date, t) => {
   return d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
 };
 
+/* check if notification is a bulletin distribution */
+const isBulletin = (n) => n?.title?.includes('Bulletin') || n?.title?.includes('bulletin') || n?.title?.includes('📊');
+
 /* groups notifications by calendar day */
 const groupByDay = (notifs) => {
   const groups = {};
@@ -63,7 +68,8 @@ const stagger = { hidden: {}, visible: { transition: { staggerChildren: 0.04 } }
 
 /* ─────────────────────────────────────────────────── */
 const ParentNotificationsPage = () => {
-  const { t } = useLanguage();
+  const { t }    = useLanguage();
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading]             = useState(true);
   const [filter, setFilter]               = useState('all');
@@ -356,6 +362,17 @@ const ParentNotificationsPage = () => {
                 <span className="text-sm font-medium flex-1">{t('notifAttachment')}</span>
                 <ExternalLink className="h-3.5 w-3.5 shrink-0" />
               </a>
+            )}
+
+            {/* View Bulletin button — shown for bulletin-type notifications */}
+            {isBulletin(selected) && (
+              <button
+                onClick={() => { setSelected(null); navigate('/dashboard/parent/report-card'); }}
+                className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/25 transition-colors">
+                <BookMarked className="h-4 w-4 shrink-0" />
+                <span className="text-sm font-bold flex-1">Voir mes Bulletins</span>
+                <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+              </button>
             )}
           </div>
         )}

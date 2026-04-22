@@ -46,7 +46,7 @@ const UnreadDot = ({ count }) => {
 
 const ParentDashboard = () => {
   const { yearStatus, loading: yearLoading } = useYearStatus();
-  const yearIsClosed = yearStatus?.status === 'closed';
+  const yearIsClosed = yearStatus?.status === 'closed' || yearStatus?.status === 'suspended';
   const location    = useLocation();
   const navigate    = useNavigate();
   const { signOut } = useAuth();

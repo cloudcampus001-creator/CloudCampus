@@ -10,7 +10,7 @@ import {
   Settings2, Lock, CheckCircle2, AlertTriangle, Loader2,
   Trash2, X, Zap, CalendarClock, BookOpen, Trophy, Info,
   ToggleLeft, ToggleRight, Flag, Archive, ChevronRight,
-  Sparkles,
+  Sparkles, PauseCircle, PlayCircle,
 } from 'lucide-react';
 import { Helmet } from 'react-helmet';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -190,6 +190,28 @@ const YearsTab = ({ schoolId, years, loading, onRefresh }) => {
     finally { setActionLoading(false); setConfirm(null); }
   };
 
+  const suspendYear = async (year) => {
+    setActionLoading(true);
+    try {
+      const { error } = await supabase.from('academic_years').update({ status: 'suspended' }).eq('id', year.id);
+      if (error) throw error;
+      toast({ title: '⏸ Year suspended', description: `${year.name} is paused. All accounts are in year-end mode until resumed.` });
+      onRefresh();
+    } catch (e) { toast({ variant: 'destructive', title: 'Error', description: e.message }); }
+    finally { setActionLoading(false); setConfirm(null); }
+  };
+
+  const resumeYear = async (year) => {
+    setActionLoading(true);
+    try {
+      const { error } = await supabase.from('academic_years').update({ status: 'open' }).eq('id', year.id);
+      if (error) throw error;
+      toast({ title: '▶ Year resumed', description: `${year.name} is active again. All accounts restored to normal.` });
+      onRefresh();
+    } catch (e) { toast({ variant: 'destructive', title: 'Error', description: e.message }); }
+    finally { setActionLoading(false); setConfirm(null); }
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -313,6 +335,19 @@ const YearsTab = ({ schoolId, years, loading, onRefresh }) => {
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all">
                       <Lock className="h-3 w-3" /> Close Year
                     </button>
+                      {/* Suspend / Resume button */}
+                      {year.status === 'open' && (
+                        <button onClick={() => setConfirm({ type: 'suspend', year })}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/10 border border-amber-500/25 text-amber-400 hover:bg-amber-500/20 transition-all">
+                          <PauseCircle className="h-3.5 w-3.5" /> Suspend
+                        </button>
+                      )}
+                      {year.status === 'suspended' && (
+                        <button onClick={() => setConfirm({ type: 'resume', year })}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/20 transition-all">
+                          <PlayCircle className="h-3.5 w-3.5" /> Resume
+                        </button>
+                      )}
                   )}
                 </div>
               </div>
@@ -331,6 +366,16 @@ const YearsTab = ({ schoolId, years, loading, onRefresh }) => {
         title={`Close ${confirm?.year?.name}?`}
         description="This archives the year and switches all dashboards to Year-End Mode. Ensure the VP has run all promotions first. This cannot be undone."
         danger onConfirm={() => closeYear(confirm.year)} onCancel={() => setConfirm(null)} loading={actionLoading} />
+      <ConfirmModal
+        open={confirm?.type === 'suspend'}
+        title={`Suspend ${confirm?.year?.name}?`}
+        description="Suspending the year temporarily puts all accounts into year-end mode. The year can be resumed at any time — no data is lost."
+        onConfirm={() => suspendYear(confirm.year)} onCancel={() => setConfirm(null)} loading={actionLoading} />
+      <ConfirmModal
+        open={confirm?.type === 'resume'}
+        title={`Resume ${confirm?.year?.name}?`}
+        description="This resumes the year and restores all accounts to normal working mode."
+        onConfirm={() => resumeYear(confirm.year)} onCancel={() => setConfirm(null)} loading={actionLoading} />
     </div>
   );
 };

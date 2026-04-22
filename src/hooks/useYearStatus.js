@@ -1,12 +1,14 @@
 /**
  * useYearStatus.js
- * Shared hook — detects current academic year state for any dashboard.
  * Returns: { yearStatus, loading }
- * yearStatus: null | { status: 'open'|'closed', year: {...} }
+ * yearStatus: null | { status: 'open' | 'closed' | 'suspended', year: {...} }
  *
- * Usage:
- *   const { yearStatus, loading } = useYearStatus();
- *   if (yearStatus?.status === 'closed') → show year-end page
+ * 'suspended' → admin suspended the year temporarily.
+ *   All non-admin dashboards see it the same as 'closed' (year-end mode).
+ *   Admin sees a special banner but keeps full access.
+ *   Can be resumed back to 'open' at any time.
+ *
+ * 'closed' → permanent end-of-year. Triggers promotion engine. Cannot be reopened.
  */
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -22,7 +24,7 @@ export function useYearStatus() {
     const check = async () => {
       setLoading(true);
       try {
-        // First: is there a currently active open year?
+        // 1. Is there a currently active open year?
         const { data: open } = await supabase
           .from('academic_years')
           .select('*')
@@ -36,7 +38,21 @@ export function useYearStatus() {
           return;
         }
 
-        // Second: is the most recent year closed? (year-end mode)
+        // 2. Is the current year suspended?
+        const { data: suspended } = await supabase
+          .from('academic_years')
+          .select('*')
+          .eq('school_id', parseInt(schoolId))
+          .eq('is_current', true)
+          .eq('status', 'suspended')
+          .maybeSingle();
+
+        if (suspended) {
+          setYearStatus({ status: 'suspended', year: suspended });
+          return;
+        }
+
+        // 3. Is the most recent year closed? (year-end mode)
         const { data: closed } = await supabase
           .from('academic_years')
           .select('*')
@@ -50,7 +66,6 @@ export function useYearStatus() {
           return;
         }
 
-        // No year at all yet
         setYearStatus(null);
       } catch (e) {
         console.error('useYearStatus:', e);
@@ -62,7 +77,6 @@ export function useYearStatus() {
 
     check();
 
-    // Realtime: re-check when academic_years table changes
     const ch = supabase
       .channel(`year_status_${schoolId}`)
       .on('postgres_changes', {
