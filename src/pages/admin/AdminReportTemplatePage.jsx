@@ -396,5 +396,4 @@ const AdminReportTemplatePage = () => {
 };
 
 export default AdminReportTemplatePage;
-</file>
 
