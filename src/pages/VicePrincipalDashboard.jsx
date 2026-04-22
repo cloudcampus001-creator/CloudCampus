@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Home, BookOpen, BookMarked, GraduationCap, MessageSquare,
-  LogOut, Menu, Cloud, Trophy,
+  LogOut, Menu, Cloud, Trophy, FileText,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
@@ -25,6 +26,7 @@ import VPNotifyPage          from '@/pages/vice_principal/VPNotifyPage';
 import VPNotificationsPage   from '@/pages/vice_principal/VPNotificationsPage';
 import VPYearClosedPage      from '@/pages/vice_principal/VPYearClosedPage';
 import VPPromotionPage       from '@/pages/vice_principal/VPPromotionPage';
+import VPReportCardsPage    from '@/pages/vice_principal/VPReportCardsPage';
 import { useYearStatus }     from '@/hooks/useYearStatus';
 
 const getInitials = (name = '') =>
@@ -132,6 +134,7 @@ const VicePrincipalDashboard = () => {
     { icon: BookMarked,    label: t('attributeSubjects'), path: '/dashboard/vice-principal/attribute-subjects', shortLabel: 'Subjects'},
     { icon: GraduationCap, label: t('marksheetReview'),   path: '/dashboard/vice-principal/marks',              shortLabel: 'Marks'   },
     { icon: Trophy,        label: 'Promotions',           path: '/dashboard/vice-principal/promotions',         shortLabel: 'Promote' },
+    { icon: FileText,      label: 'Bulletins',            path: '/dashboard/vice-principal/report-cards',      shortLabel: 'Bullets' },
     { icon: MessageSquare, label: t('chat'),              path: '/dashboard/vice-principal/chat',               shortLabel: 'Chat'    },
   ];
 
@@ -279,6 +282,7 @@ const VicePrincipalDashboard = () => {
               <Route path="/attribute-subjects" element={<AttributeSubjectsPage selectedClass={selectedClassId} />} />
               <Route path="/marks"              element={<VPMarksPage       selectedClass={selectedClassId} />} />
               <Route path="/promotions"         element={<VPPromotionPage />} />
+              <Route path="/report-cards"       element={<VPReportCardsPage />} />
               <Route path="/chat"               element={<VPChatPage        selectedClass={selectedClassId} />} />
               <Route path="/notify"             element={<VPNotifyPage      selectedClass={selectedClassId} />} />
               <Route path="/notifications"      element={<VPNotificationsPage />} />
