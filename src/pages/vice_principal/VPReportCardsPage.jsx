@@ -19,7 +19,6 @@ import {
   fmt, getMention,
 } from '@/lib/reportCardBuilder';
 
-const fmt   = (n)        => n != null ? Number(n).toFixed(2) : '—';
 const round = (n)        => n != null ? Math.round(n * 100) / 100 : null;
 
 
@@ -483,3 +482,4 @@ const VPReportCardsPage = () => {
 };
 
 export default VPReportCardsPage;
+
