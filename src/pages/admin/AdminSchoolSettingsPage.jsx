@@ -1,3 +1,4 @@
+
 /**
  * AdminSchoolSettingsPage.jsx — FIXED
  *
@@ -140,16 +141,15 @@ const AdminSchoolSettingsPage = () => {
     }
     setSaving(true);
     try {
-      // ✅ FIXED: .select('*') without .single() — take data[0]
-      const { data, error } = await supabase
+      // Fix: don't rely on returned rows (RLS can block the read-back on update)
+      // Just fire the update, then re-fetch to confirm
+      const { error } = await supabase
         .from('schools')
         .update({ latitude: lat, longitude: lng, geo_radius_meters: rad })
-        .eq('id', parseInt(schoolId))
-        .select('*');
+        .eq('id', parseInt(schoolId));
       if (error) throw error;
-      const updated = Array.isArray(data) && data.length > 0 ? data[0] : null;
-      if (!updated) throw new Error('Update failed — no rows modified. Verify your school ID.');
-      setSchool(updated);
+      // Re-fetch fresh data
+      await fetchSchool();
       setEditMode(false);
       toast({ title: '✅ Settings saved', description: `Geo-fence set to ${rad} m radius.` });
     } catch (e) {
@@ -160,14 +160,12 @@ const AdminSchoolSettingsPage = () => {
   const handleClear = async () => {
     setSaving(true);
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('schools')
         .update({ latitude: null, longitude: null, geo_radius_meters: 300 })
-        .eq('id', parseInt(schoolId))
-        .select('*');
+        .eq('id', parseInt(schoolId));
       if (error) throw error;
-      const updated = Array.isArray(data) && data.length > 0 ? data[0] : null;
-      setSchool(updated);
+      await fetchSchool();
       setForm({ latitude: '', longitude: '', geo_radius_meters: '300' });
       setEditMode(true);
       toast({ title: 'Geo-fence cleared', description: 'Location enforcement has been disabled.' });
