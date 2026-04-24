@@ -5,7 +5,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   BookMarked, Search, Loader2, MessageSquare, X, Save, Send,
-  GraduationCap, Printer, CheckCircle2, AlertCircle, Layers, Calendar,
+  GraduationCap, Printer, CheckCircle2, AlertCircle, Layers, Calendar, Eye,
 } from 'lucide-react';
 import { Helmet } from 'react-helmet';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -13,12 +13,14 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import PageTransition from '@/components/PageTransition';
+import { ReportCardViewerModal } from '@/components/ReportCardViewerModal';
 import {
   fetchSchoolTemplate, buildCardHtml,
   computeSeqAvg, computeTermAvgForSubject, computeGeneralAvg,
   fmt, getMention,
 } from '@/lib/reportCardBuilder';
 
+const fmt   = (n)        => n != null ? Number(n).toFixed(2) : '—';
 const round = (n)        => n != null ? Math.round(n * 100) / 100 : null;
 
 
@@ -152,6 +154,13 @@ const VPReportCardsPage = () => {
   const [commentTarget,  setCommentTarget]  = useState(null);
   const [confirmPublish, setConfirmPublish] = useState(false);
 
+  // Viewer modal state
+  const [viewerOpen,    setViewerOpen]    = useState(false);
+  const [viewerHtml,    setViewerHtml]    = useState('');
+  const [viewerDlHtml,  setViewerDlHtml]  = useState(''); // with autoPrint for VP download
+  const [viewerTitle,   setViewerTitle]   = useState('');
+  const [viewerSubtitle,setViewerSubtitle]= useState('');
+
   /* ── Init ── */
   useEffect(() => {
     if (!schoolId) return;
@@ -265,7 +274,7 @@ const VPReportCardsPage = () => {
 
   useEffect(() => { loadStudents(); }, [loadStudents]);
 
-  /* ── Open PDF (new window, auto-prints) ── */
+  /* ── Open viewer modal (view) + prepare download ── */
   const openPdf = async (student) => {
     const template = await fetchSchoolTemplate(schoolId);
     const scopeSequences = periodType === 'sequence' ? [selectedPeriod] : sequences.filter(s => s.term_id === selectedPeriod.id);
@@ -277,9 +286,23 @@ const VPReportCardsPage = () => {
       const { data } = await q.maybeSingle();
       comment = data;
     }
-    const html = buildCardHtml({ student, template, year: currentYear, periodName: selectedPeriod.name, periodType, subjectRows: student.subjectRows, scopeSequences, generalAvg: student.generalAvg, rank: student.rank, totalStudents: students.length, absences: student.absences, comment });
+    const baseParams = { student, template, year: currentYear, periodName: selectedPeriod.name, periodType, subjectRows: student.subjectRows, scopeSequences, generalAvg: student.generalAvg, rank: student.rank, totalStudents: students.length, absences: student.absences, comment };
+    // View mode: no auto-print (clean iframe render)
+    const viewHtml = buildCardHtml({ ...baseParams, autoPrint: false });
+    // Download mode: auto-print script fires when opened in new window
+    const dlHtml   = buildCardHtml({ ...baseParams, autoPrint: true });
+    setViewerHtml(viewHtml);
+    setViewerDlHtml(dlHtml);
+    setViewerTitle(`Bulletin — ${selectedPeriod.name} · ${selectedClass?.name}`);
+    setViewerSubtitle(student.name);
+    setViewerOpen(true);
+  };
+
+  /* VP clicks Print/PDF button inside viewer toolbar */
+  const handleViewerDownload = () => {
     const w = window.open('', '_blank');
-    if (w) { w.document.write(html); w.document.close(); }
+    if (w) { w.document.write(viewerDlHtml); w.document.close(); }
+    else alert('Veuillez autoriser les popups pour imprimer.');
   };
 
   /* ── Publish & Distribute ── */
@@ -290,7 +313,6 @@ const VPReportCardsPage = () => {
     setPubProgress({ done: 0, total: students.length });
     try {
       const template = await fetchSchoolTemplate(schoolId);
-      const accent = school?.report_accent_color || '#6366f1';
       const scopeSequences = periodType === 'sequence' ? [selectedPeriod] : sequences.filter(s => s.term_id === selectedPeriod.id);
       const termId = periodType === 'sequence' ? selectedPeriod.term_id : selectedPeriod.id;
       const basePath = `report_cards/${schoolId}/${selectedClass.id}/${periodType}_${selectedPeriod.id}`;
@@ -301,7 +323,7 @@ const VPReportCardsPage = () => {
         const q = supabase.from('report_card_comments').select('*').eq('student_matricule', student.matricule).eq('academic_year_id', currentYear.id);
         if (termId) q.eq('term_id', termId); else q.is('term_id', null);
         const { data: commentRow } = await q.maybeSingle();
-        const html = buildCardHtml({ student, template, year: currentYear, periodName: selectedPeriod.name, periodType, subjectRows: student.subjectRows, scopeSequences, generalAvg: student.generalAvg, rank: student.rank, totalStudents: students.length, absences: student.absences, comment: commentRow });
+        const html = buildCardHtml({ student, template, year: currentYear, periodName: selectedPeriod.name, periodType, subjectRows: student.subjectRows, scopeSequences, generalAvg: student.generalAvg, rank: student.rank, totalStudents: students.length, absences: student.absences, comment: commentRow, autoPrint: true });
         const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
         let fileUrl = null;
         try {
@@ -427,7 +449,7 @@ const VPReportCardsPage = () => {
                           <MessageSquare className="h-3.5 w-3.5" /> Note
                         </button>
                         <button onClick={() => openPdf(student)} className="h-8 px-3 rounded-xl bg-indigo-500/15 border border-indigo-500/25 hover:bg-indigo-500/25 text-xs font-semibold text-indigo-300 transition-all flex items-center gap-1.5">
-                          <Printer className="h-3.5 w-3.5" /> PDF
+                          <Eye className="h-3.5 w-3.5" /> Voir
                         </button>
                       </div>
                     </div>
@@ -477,9 +499,19 @@ const VPReportCardsPage = () => {
           </div>
         </div>
       </GlassModal>
+
+      {/* Internal report card viewer — VP can view and print/download */}
+      <ReportCardViewerModal
+        isOpen={viewerOpen}
+        onClose={() => setViewerOpen(false)}
+        htmlContent={viewerHtml}
+        title={viewerTitle}
+        subtitle={viewerSubtitle}
+        canDownload={true}
+        onDownload={handleViewerDownload}
+      />
     </PageTransition>
   );
 };
 
 export default VPReportCardsPage;
-
