@@ -1,3 +1,4 @@
+<file path="src/pages/vice_principal/VPReportCardsPage.jsx">
 /**
  * VPReportCardsPage.jsx — rebuilt with sequence/term selector, PDF, publish & distribute
  */
@@ -20,7 +21,6 @@ import {
   fmt, getMention,
 } from '@/lib/reportCardBuilder';
 
-const fmt   = (n)        => n != null ? Number(n).toFixed(2) : '—';
 const round = (n)        => n != null ? Math.round(n * 100) / 100 : null;
 
 
@@ -515,3 +515,4 @@ const VPReportCardsPage = () => {
 };
 
 export default VPReportCardsPage;
+
