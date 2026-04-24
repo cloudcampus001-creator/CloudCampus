@@ -1,4 +1,3 @@
-<file path="src/pages/vice_principal/VPReportCardsPage.jsx">
 /**
  * VPReportCardsPage.jsx — rebuilt with sequence/term selector, PDF, publish & distribute
  */
