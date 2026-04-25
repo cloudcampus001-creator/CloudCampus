@@ -7,7 +7,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
-  GraduationCap, Loader2, FileText,
+  GraduationCap, Loader2, FileText, X,
   Lock, CheckCircle2, Bell, AlertCircle, Eye,
 } from 'lucide-react';
 import { Helmet } from 'react-helmet';
