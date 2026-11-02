@@ -1,75 +1,60 @@
 /**
  * ProtectedRoute.jsx
  * ------------------
- * Guards dashboard routes using a cryptographically signed Supabase JWT.
+ * Guards dashboard routes. The role comes from the server-signed JWT claim
+ * `app_metadata.role`, never from localStorage or user-editable metadata.
  *
- * RACE-CONDITION FIX:
- * When a login page calls navigate() immediately after supabase.auth.setSession(),
- * the React auth context (SupabaseAuthContext) may not have processed the
- * SIGNED_IN event yet — so isAuthenticated is still false on the first render.
- *
- * Old behaviour: immediately bounce to "/" → user sees landing page flash.
- * New behaviour: if the context says "no session", do a direct supabase.auth.getSession()
- * check as a fallback before deciding to redirect. The tokens are already stored
- * in the Supabase client by the time navigate() fires, so getSession() returns
- * the live session even when the React context hasn't caught up yet.
+ * Race-condition handling: right after login, supabase.auth.setSession() has
+ * stored the tokens but the React auth context may not have processed the
+ * SIGNED_IN event yet. If the context reports no session, we ask the Supabase
+ * client directly before deciding to redirect, so users never see a bounce.
  */
 import React, { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/lib/customSupabaseClient';
 import { FullPageLoader } from '@/components/ui/loading-spinner';
+import { ROLE_HOME, getSessionRole, normalizeRole } from '@/lib/roles';
 
 const ProtectedRoute = ({ children, role }) => {
   const { isAuthenticated, loading, session } = useAuth();
+  const { t } = useLanguage();
 
-  // Start in "checking" mode so we never render a bounce on the first frame.
-  const [checking, setChecking]         = useState(true);
+  const [checking, setChecking]           = useState(true);
   const [directSession, setDirectSession] = useState(null);
 
   useEffect(() => {
-    // Wait for the auth context to finish its own initialisation first.
     if (loading) return;
 
     if (isAuthenticated) {
-      // Context already has a session — no fallback check needed.
       setChecking(false);
       return;
     }
 
-    // Context says no session, but the login page may have called
-    // supabase.auth.setSession() a moment ago and React hasn't re-rendered yet.
-    // Ask Supabase directly — it reads from its internal token store, which
-    // setSession() already updated synchronously.
-    supabase.auth.getSession().then(({ data: { session: liveSession } }) => {
-      setDirectSession(liveSession ?? null);
+    let cancelled = false;
+    supabase.auth.getSession().then(({ data: { session: live } }) => {
+      if (cancelled) return;
+      setDirectSession(live ?? null);
       setChecking(false);
     });
+    return () => { cancelled = true; };
   }, [isAuthenticated, loading]);
 
-  // Still waiting — show a spinner instead of bouncing.
   if (loading || checking) {
-    return <FullPageLoader text="Verifying session…" />;
+    return <FullPageLoader text={t('verifyingSession')} />;
   }
 
-  // Prefer the context session; fall back to the direct check.
   const activeSession = session ?? directSession;
+  if (!activeSession) return <Navigate to="/" replace />;
 
-  // No session at all → go to landing page.
-  if (!activeSession) {
-    return <Navigate to="/" replace />;
-  }
+  const userRole = getSessionRole(activeSession);
+  if (!userRole) return <Navigate to="/" replace />;
 
-  // Role comes from JWT user_metadata — server-signed, cannot be forged.
-  const userRole = activeSession?.user?.user_metadata?.role;
-
-  if (!userRole) {
-    return <Navigate to="/" replace />;
-  }
-
-  if (role && userRole !== role) {
-    // Authenticated but wrong role — redirect to root rather than leaking route info.
-    return <Navigate to="/" replace />;
+  // Signed in, but this area belongs to another role: send them to their own
+  // dashboard rather than leaking which routes exist.
+  if (role && userRole !== normalizeRole(role)) {
+    return <Navigate to={ROLE_HOME[userRole]} replace />;
   }
 
   return children;
